@@ -11,6 +11,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 export default function Questboard() {
   const [quests, setQuests] = useState([]);
   const [selectedQuest, setSelectedQuest] = useState(null);
+  const [selectedQuestPosts, setSelectedQuestPosts] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newPostDesc, setNewPostDesc] = useState("");
   const [newPostImage, setNewPostImage] = useState(null);
@@ -365,7 +366,24 @@ export default function Questboard() {
     const ended = item.endDate ? (new Date(item.endDate) < new Date()) : false;
 
     return (
-      <TouchableOpacity style={styles.card} onPress={() => { setSelectedQuest(item); setModalVisible(true); }}>
+      <TouchableOpacity style={styles.card} onPress={async () => {
+        // Fetch latest posts for this quest from Firestore
+        try {
+          const questRef = doc(db, "Quests", item.id);
+          const questSnap = await getDoc(questRef);
+          if (questSnap.exists()) {
+            setSelectedQuest({ id: questSnap.id, ...questSnap.data() });
+            setSelectedQuestPosts(questSnap.data().posts || []);
+          } else {
+            setSelectedQuest(item);
+            setSelectedQuestPosts(item.posts || []);
+          }
+        } catch (e) {
+          setSelectedQuest(item);
+          setSelectedQuestPosts(item.posts || []);
+        }
+        setModalVisible(true);
+      }}>
         {item.image ? <Image source={{uri:item.image}} style={{width:"100%",height:140,borderRadius:8,marginBottom:8}} /> : null}
 
         <View style={{flexDirection:'row', alignItems:'center', marginBottom:4}}>
@@ -414,7 +432,18 @@ export default function Questboard() {
       />
 
       {/* Quest Modal */}
-      <Modal visible={modalVisible} animationType="slide">
+      <Modal visible={modalVisible} animationType="slide" onShow={async () => {
+        if (selectedQuest) {
+          try {
+            const questRef = doc(db, "Quests", selectedQuest.id);
+            const questSnap = await getDoc(questRef);
+            if (questSnap.exists()) {
+              setSelectedQuest({ id: questSnap.id, ...questSnap.data() });
+              setSelectedQuestPosts(questSnap.data().posts || []);
+            }
+          } catch (e) { /* ignore */ }
+        }
+      }}>
         <ScrollView style={{padding:10}}>
           {selectedQuest && <>
             {selectedQuest.image ? <Image source={{uri:selectedQuest.image}} style={{width:'100%',height:220,borderRadius:8,marginBottom:12}} /> : null}
@@ -432,7 +461,7 @@ export default function Questboard() {
 
             <Text style={{marginTop:20,fontSize:18,fontWeight:"bold"}}>Posts</Text>
             <View style={styles.postsSection}>
-              {selectedQuest.posts?.length ? selectedQuest.posts.map((p,i)=>(
+              {selectedQuestPosts.length ? selectedQuestPosts.map((p,i)=>(
                 <View key={i} style={styles.postCard}>
                   <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
                     {p.userIcon ? <Image source={{uri:p.userIcon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
@@ -451,7 +480,15 @@ export default function Questboard() {
                 <TouchableOpacity style={styles.buttonSmall} onPress={()=>pickImage(setNewPostImage)}>
                   <Text style={styles.buttonText}>Add Image</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#00b894'}]} onPress={()=>handleAddPost(selectedQuest)}>
+                <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#00b894'}]} onPress={async ()=>{
+                  await handleAddPost(selectedQuest);
+                  // Refetch posts after adding
+                  try {
+                    const questRef = doc(db, "Quests", selectedQuest.id);
+                    const questSnap = await getDoc(questRef);
+                    if (questSnap.exists()) setSelectedQuestPosts(questSnap.data().posts || []);
+                  } catch(e){}
+                }}>
                   <Text style={styles.buttonText}>Post</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#d63031'}]} onPress={()=>{ setNewPostDesc(''); setNewPostImage(null); }}>
@@ -462,7 +499,15 @@ export default function Questboard() {
             </View>
 
             <View style={{marginTop:8}}>
-              <TouchableOpacity style={[styles.button,{backgroundColor:"#00b894"}]} onPress={()=>handleCompleteQuest(selectedQuest)}>
+              <TouchableOpacity style={[styles.button,{backgroundColor:"#00b894"}]} onPress={async ()=>{
+                await handleCompleteQuest(selectedQuest);
+                // Refetch posts after completing quest (in case posts are affected)
+                try {
+                  const questRef = doc(db, "Quests", selectedQuest.id);
+                  const questSnap = await getDoc(questRef);
+                  if (questSnap.exists()) setSelectedQuestPosts(questSnap.data().posts || []);
+                } catch(e){}
+              }}>
                 <Text style={styles.buttonText}>Complete Quest</Text>
               </TouchableOpacity>
 
