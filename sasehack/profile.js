@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, FlatList, ActivityIndicator, ScrollView } from "react-native";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from "firebase/firestore";
 import { db, auth } from "./firebase";
 import { signOut } from "firebase/auth";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,73 +11,143 @@ export default function Profile({ navigation }) {
 
   const [user, setUser] = useState(null);
   const [completedQuests, setCompletedQuests] = useState([]);
+  const [userQuests, setUserQuests] = useState([]);
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingQuests, setLoadingQuests] = useState(true);
   const [activeTab, setActiveTab] = useState("quests");
+  const [userPosts, setUserPosts] = useState([]);
 
   // Fetch user data
+useEffect(() => {
+  if (!uid) return;
+
+  const userRef = doc(db, "Users", uid);
+
+  const unsubscribe = onSnapshot(userRef, (userSnap) => {
+    if (!userSnap.exists()) return;
+
+    const userData = userSnap.data();
+    setUser(userData);       // updates badges, XP, avatar, etc.
+    setLoadingUser(false);   // stop loading spinner if it was showing
+  }, (error) => {
+    console.error("Error listening to user document:", error);
+  });
+
+  // Cleanup listener on unmount
+  return () => unsubscribe();
+}, [uid]);
+
+useEffect(() => {
+  if (!user || !uid) return;
+
+  const userQuests = user.Quest || [];
+  const completedQuestIds = userQuests
+    .filter(q => q.completed)
+    .map(q => q.questID);
+
+  if (completedQuestIds.length === 0) {
+    setCompletedQuests([]);
+    setLoadingQuests(false);
+    return;
+  }
+
+  const unsubscribes = completedQuestIds.map((questId) => {
+    const questRef = doc(db, "Quests", questId);
+
+    return onSnapshot(questRef, (questSnap) => {
+      if (!questSnap.exists()) return;
+
+      const questData = questSnap.data();
+      setCompletedQuests(prev => {
+        // Remove old entry for this quest
+        const otherQuests = prev.filter(q => q.id !== questId);
+        return [...otherQuests, { id: questSnap.id, ...questData }];
+      });
+    });
+  });
+
+  setLoadingQuests(false);
+
+    // Cleanup listeners on unmount
+    return () => unsubscribes.forEach(fn => fn());
+  }, [user, uid]);
+
+    
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const docRef = doc(db, "Users", uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) setUser(docSnap.data());
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      } finally {
-        setLoadingUser(false);
-      }
-    };
-    fetchUser();
-  }, [uid]);
+    if (!uid || !user) return;
 
-  // Fetch completed quests
-  useEffect(() => {
-    if (!user) return; // wait until user is loaded
+    const questIds = (user.Quest || []).map(q => q.questID);
+    const unsubscribes = [];
 
-    const fetchCompletedQuests = async () => {
-      try {
-        const userQuests = user.Quest || []; // array of quest maps
-        const completedQuestIds = userQuests
-          .filter(quest => quest.completed)   // keep only completed quests
-          .map(quest => quest.questID);       // extract the questID string
+    questIds.forEach((questId) => {
+      const questRef = doc(db, "Quests", questId);
 
-        
+      const unsubscribe = onSnapshot(questRef, (questSnap) => {
+        if (!questSnap.exists()) return;
 
-        // Log completed quest IDs
-        console.log("Complete quest IDs:", completedQuestIds);
+        const questData = questSnap.data();
+        const postsArray = questData.posts || [];
 
-          if (completedQuestIds.length === 0) {
-            setCompletedQuests([]);
-            setLoadingQuests(false);
-            return;
-          }
+        // Only include posts from current user
+        const userPostsInQuest = postsArray
+          .filter(post => post.userId === uid)
+          .map((post, index) => ({
+            questId,
+            questTitle: questData.title,
+            index,
+            ...post
+          }));
 
-        const questsDocs = await Promise.all(
-          completedQuestIds.map(async (questId) => {
-            const questDocRef = doc(db, "Quests", questId);
-            const questSnap = await getDoc(questDocRef);
-            if (questSnap.exists()) return { id: questSnap.id, ...questSnap.data() };
-            return null;
-          })
-        );
+        // Update state for all posts
+        setUserPosts(prevPosts => {
+          // Remove old posts from this quest
+          const otherPosts = prevPosts.filter(p => p.questId !== questId);
+          return [...otherPosts, ...userPostsInQuest];
+        });
+      });
 
-        setCompletedQuests(questsDocs.filter(q => q !== null));
-      } catch (error) {
-        console.error("Error fetching quests:", error);
-      } finally {
-        setLoadingQuests(false);
-      }
-    };
+      unsubscribes.push(unsubscribe);
+    });
 
-    fetchCompletedQuests();
-  }, [user]);
+    // Cleanup all listeners on unmount
+    return () => unsubscribes.forEach(fn => fn());
+  }, [uid, user]);
+
+
 
   const handleLogout = async () => {
     await signOut(auth);
     navigation.replace("Login");
   };
+  const renderPostBadge = ({ item }) => {
+  return (
+    <View style={[styles.postCardContainer, { width: windowWidth * 0.9 }]}>
+      {/* Posted under + quest title */}
+      <Text style={styles.postedUnder}>
+        posted under <Text style={styles.questTitleLabel}>{item.questTitle}</Text>
+      </Text>
 
+      {/* Row: user icon on left, user name + description on right */}
+      <View style={styles.userInfoRow}>
+        {item.userIcon ? (
+          <Image source={{ uri: item.userIcon }} style={styles.userIconLarge} />
+        ) : (
+          <View style={[styles.userIconLarge, { backgroundColor: "#dfe6e9" }]} />
+        )}
+
+        <View style={styles.userTextColumn}>
+          <Text style={styles.userName}>{item.username || "Unknown User"}:</Text>
+          <Text style={styles.postDescription}>{item.description}</Text>
+        </View>
+      </View>
+
+      {/* Post image */}
+      {item.image ? (
+        <Image source={{ uri: item.image }} style={styles.postImage} />
+      ) : null}
+    </View>
+  );
+  };
   const windowWidth = Dimensions.get("window").width;
 
   const renderBadge = ({ item }) => (
@@ -201,9 +271,17 @@ export default function Profile({ navigation }) {
               </View>
             )
           ) : (
-            <Text style={{ textAlign: "center", marginVertical: 20 }}>
-              User’s posts will go here...
-            </Text>
+              userPosts.length === 0 ? (
+                <Text style={{ textAlign: "center", marginVertical: 20 }}>No posts yet!</Text>
+              ) : (
+                <View style={{ width: "100%", alignItems: "center", paddingBottom: 10 }}>
+                  {userPosts.map((post, index) => (
+                    <View key={`${post.questId}-${index}`} style={{ marginBottom: 16, width: windowWidth * 0.8 }}>
+                      {renderPostBadge({ item: post })}
+                    </View>
+                  ))}
+                </View>
+              )
           )}
         </View>
       </ScrollView>
@@ -230,7 +308,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginTop: 20,
-    marginBottom: 20 // increase margin between cards
+    marginBottom: 20, // increase margin between cards
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
   },
   badgeIcon: { width: 80, height: 80, borderRadius: 40, marginBottom: 10 },
   badgeTitle: { fontSize: 16, fontWeight: "bold" },
@@ -244,6 +327,11 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     marginTop: 10,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
     
   },
   questBadgeIcon: { width: 80, height: 80, borderRadius: 40, marginBottom: 8 },
@@ -273,5 +361,76 @@ const styles = StyleSheet.create({
   },
   activeText: {
     color: "#fff",
-  }
+  },
+
+  postCardContainer: {
+  backgroundColor: "#f0f0f0",
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 16,
+  alignItems: "flex-start",
+  alignSelf: "center",
+  shadowColor: "#000",
+  shadowOpacity: 0.1,
+  shadowOffset: { width: 0, height: 2 },
+  shadowRadius: 4,
+  elevation: 2,
+},
+postHeader: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginBottom: 8,
+},
+userIcon: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  marginRight: 8,
+},
+postedUnder: {
+  fontStyle: "italic",
+  marginBottom: 16,
+  color: "#636e72", // subtle gray, optional
+},
+questTitleLabel: {
+  fontSize: 20,
+  fontWeight: "bold",
+  color: "#2d3436",
+  marginBottom: 20,
+},
+userInfoRow: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  marginBottom: 0,
+  width: "100%",
+},
+userIconLarge: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  marginRight: 10,
+},
+userTextColumn: {
+  flex: 1,
+  flexDirection: "column",
+},
+userName: {
+  fontSize: 14,
+  fontWeight: "600",
+  color: "#2d3436",
+  marginBottom: 2,
+  textDecorationLine: "underline"
+},
+postDescription: {
+  fontSize: 14,
+  color: "#2d3436",
+  flexWrap: "wrap",
+},
+postImage: {
+  width: "100%",
+  height: 180,
+  borderRadius: 8,
+  marginTop: 0,
+  resizeMode: "cover",
+},
 });
