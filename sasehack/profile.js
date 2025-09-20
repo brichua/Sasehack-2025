@@ -69,10 +69,11 @@ export default function Profile({ route, navigation }) {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: badgeWidth * 0.1 }}
+       
       />
-      
+      <Text style={styles.badges}>Completed Quests: </Text>
       <TouchableOpacity style={styles.button} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Logout</Text>
+      <Text style={styles.buttonText}>Logout</Text>
       </TouchableOpacity>
       
     
@@ -90,18 +91,9 @@ const styles = StyleSheet.create({
   name: { fontSize: 24, fontWeight: "bold" },
   email: { fontSize: 16, marginBottom: 10 },
   xp: { fontSize: 16, marginBottom: 5 },
-  badges: { fontSize: 24, marginBottom: 5, textAlign:"left",alignSelf: "stretch", padding: 18, fontWeight:"bold", textDecorationLine: "underline" },
+  badges: { fontSize: 24, marginBottom: 5, textAlign:"left",alignSelf: "stretch", padding: 12, fontWeight:"bold", textDecorationLine: "underline" },
   button: { backgroundColor: "#6c5ce7", padding: 12, borderRadius: 8, width: 200 },
   buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
-  badgeContainer: {
-    height: 200,
-    marginHorizontal: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f0f0f0",
-    borderRadius: 12,
-    padding: 10,
-  },
   badgeContainer: {
     height: 200,
     marginHorizontal: 10,
