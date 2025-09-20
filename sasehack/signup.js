@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { auth, db, storage } from "./firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, uploadString } from "firebase/storage";
@@ -9,30 +8,19 @@ import * as FileSystem from "expo-file-system";
 import { Link } from "@react-navigation/native";
 
 
-export default function CreateAccount({ navigation }) {
+export default function Signup({ navigation }) {
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [avatar, setAvatar] = useState(null);
 
   const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
-
-    if (!result.canceled) {
-      setAvatar(result.assets[0].uri);
-    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1,1], quality: 0.5 });
+    if (!result.canceled) setAvatar(result.assets[0].uri);
   };
 
-  const handleSignUp = async () => {
-    if (!email || !password || !displayName) {
-      Alert.alert("Error", "Please fill all fields");
-      return;
-    }
+  const handleSignup = async () => {
+    if (!email || !password || !displayName) return Alert.alert("Error", "Fill all fields");
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -64,15 +52,9 @@ export default function CreateAccount({ navigation }) {
       const avatarUrl = avatar || null;
 
 
-      await setDoc(doc(db, "users", user.uid), {
-        displayName,
-        email,
-        avatarUrl,
-        createdAt: new Date(),
-      });
+      await setDoc(doc(db, "users", user.uid), { displayName, email, avatarUrl, createdAt: new Date(), xp: 0, badges: [] });
 
-      Alert.alert("Success", "Account created!");
-      navigation.replace("Questboard", { userId: user.uid }); // Navigate to Questboard
+      navigation.replace("Profile", { userId: user.uid });
     } catch (error) {
       Alert.alert("Error", error.message);
     }
@@ -80,25 +62,18 @@ export default function CreateAccount({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Create Account</Text>
-
+      <Text style={styles.header}>Sign Up</Text>
       <TouchableOpacity onPress={pickImage} style={styles.avatarPicker}>
-        {avatar ? (
-          <Image source={{ uri: avatar }} style={styles.avatar} />
-        ) : (
-          <Text style={{ textAlign: "center" }}>Pick an Avatar</Text>
-        )}
+        {avatar ? <Image source={{ uri: avatar }} style={styles.avatar} /> : <Text style={{ textAlign: "center" }}>Pick Avatar</Text>}
       </TouchableOpacity>
-
       <TextInput placeholder="Display Name" style={styles.input} value={displayName} onChangeText={setDisplayName} />
-      <TextInput placeholder="Email" style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+      <TextInput placeholder="Email" style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
       <TextInput placeholder="Password" style={styles.input} value={password} onChangeText={setPassword} secureTextEntry />
-
-      <TouchableOpacity style={styles.button} onPress={handleSignUp}>
+      <TouchableOpacity style={styles.button} onPress={handleSignup}>
         <Text style={styles.buttonText}>Sign Up</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
+      <TouchableOpacity onPress={() => navigation.navigate('Login')}>
       <Text style={{ color: "blue", textAlign: "center", marginTop: 10 }}>
         I already have an account.
       </Text>
