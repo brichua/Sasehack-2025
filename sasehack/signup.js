@@ -55,7 +55,7 @@ export default function Signup({ navigation }) {
 
       await setDoc(doc(db, "Users", user.uid), { displayName, email, avatarUrl, createdAt: new Date(), xp: 0, badges: [] });
 
-      navigation.replace("Profile", { userId: user.uid });
+      navigation.replace("MainTabs");
     } catch (error) {
       Alert.alert("Error", error.message);
     }

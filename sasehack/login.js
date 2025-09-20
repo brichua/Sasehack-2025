@@ -11,7 +11,7 @@ export default function Login({ navigation }) {
     if (!email || !password) return Alert.alert("Error", "Fill all fields");
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      navigation.replace("Profile", { userId: userCredential.user.uid });
+      navigation.replace("MainTabs");
     } catch (error) {
       Alert.alert("Error", error.message);
     }
