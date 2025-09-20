@@ -225,7 +225,7 @@ export default function Questboard() {
 
   // Also append this quest id to user's completed quests array
   // Use arrayUnion to avoid duplicates
-  await updateDoc(userRef, { ...updates, quests: arrayUnion(quest.id) });
+  await updateDoc(userRef, { ...updates, quests: arrayUnion({ questID: quest.id, completed: true })});
 
       Alert.alert('Quest Completed!', `+${rewardXp} XP — Level ${newLevel}`);
       setModalVisible(false);
