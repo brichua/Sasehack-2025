@@ -6,6 +6,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, uploadString } from "firebase/storage";
 import * as FileSystem from "expo-file-system";
 import { Link } from "@react-navigation/native";
+import { auth, db, storage } from "./firebase";
 
 
 export default function Signup({ navigation }) {
