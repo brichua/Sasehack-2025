@@ -4,7 +4,10 @@ import * as ImagePicker from "expo-image-picker";
 import { auth, db, storage } from "./firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, uploadString } from "firebase/storage";
+import * as FileSystem from "expo-file-system";
+import { Link } from "@react-navigation/native";
+
 
 export default function CreateAccount({ navigation }) {
   const [email, setEmail] = useState("");
@@ -35,15 +38,31 @@ export default function CreateAccount({ navigation }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      let avatarUrl = null;
+    //   let avatarUrl = null;
 
-      if (avatar) {
-        const response = await fetch(avatar);
-        const blob = await response.blob();
-        const storageRef = ref(storage, `avatars/${user.uid}.jpg`);
-        await uploadBytes(storageRef, blob);
-        avatarUrl = await getDownloadURL(storageRef);
-      }
+     
+      
+    //   if (avatar) {
+    //   await user.getIdToken(true); // ensure auth is ready
+    //   console.log("Avatar URI:", avatar);
+
+    //   const response = await fetch(avatar);
+    //   const blob = await response.blob();
+    //   console.log("Blob size:", blob.size);
+
+    //   const storageRef = ref(storage, `avatars/${user.uid}.jpg`);
+
+    //   try {
+    //     await uploadBytes(storageRef, blob);
+    //     avatarUrl = await getDownloadURL(storageRef);
+    //   } catch (err) {
+    //     console.error("Upload failed:", err);
+    //     console.error("Server response:", err?.serverResponse);
+    //     throw err;
+    //   }
+    // }
+      const avatarUrl = avatar || null;
+
 
       await setDoc(doc(db, "users", user.uid), {
         displayName,
@@ -78,6 +97,12 @@ export default function CreateAccount({ navigation }) {
       <TouchableOpacity style={styles.button} onPress={handleSignUp}>
         <Text style={styles.buttonText}>Sign Up</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
+      <Text style={{ color: "blue", textAlign: "center", marginTop: 10 }}>
+        I already have an account.
+      </Text>
+    </TouchableOpacity>
     </View>
   );
 }

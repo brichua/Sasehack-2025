@@ -3,6 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import CreateAccount from "./CreateAccount";
 import Questboard from "./Questboard";
+import SignIn from "./SignIn";
 
 const Stack = createStackNavigator();
 
@@ -11,7 +12,10 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="CreateAccount" component={CreateAccount} />
+        <Stack.Screen name="SignIn" component={SignIn} />
         <Stack.Screen name="Questboard" component={Questboard} />
+
+         
       </Stack.Navigator>
     </NavigationContainer>
   );
