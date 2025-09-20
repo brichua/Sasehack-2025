@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, FlatList, ActivityIndicator } from "react-native";
+import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, FlatList, ActivityIndicator, ScrollView } from "react-native";
 import { doc, getDoc } from "firebase/firestore";
 import { db, auth } from "./firebase";
 import { signOut } from "firebase/auth";
@@ -119,12 +119,14 @@ export default function Profile({ navigation }) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#f7f1e3" }}>
+      <ScrollView>
       <View style={styles.container}>
         {user.avatarUrl && <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />}
         <Text style={styles.name}>{user.displayName}</Text>
         <Text style={styles.email}>{user.email}</Text>
         <Text style={styles.xp}>XP: {user.xp || 0}</Text>
-
+        
+        <Text style = {{marginBottom: 20}}>
         <Text style={styles.sectionTitle}>Badges:</Text>
         <FlatList
           data={user.badges}
@@ -136,6 +138,7 @@ export default function Profile({ navigation }) {
           contentContainerStyle={{ paddingHorizontal: windowWidth * 0.1, paddingBottom: 0 }}
           style={{ height: 220}}
         />
+        </Text>
         
         <Text style={styles.questTitle}>Completed Quests:</Text>
         {loadingQuests ? (
@@ -153,10 +156,9 @@ export default function Profile({ navigation }) {
 
         )}
 
-        <TouchableOpacity style={styles.button} onPress={handleLogout}>
-          <Text style={styles.buttonText}>Logout</Text>
-        </TouchableOpacity>
+       
       </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -167,7 +169,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 24, fontWeight: "bold" },
   email: { fontSize: 16, marginBottom: 8 },
   xp: { fontSize: 16, marginBottom: 12 },
-  sectionTitle: { fontSize: 24, marginBottom: 8, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
+  sectionTitle: { fontSize: 24, marginBottom: 20, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
   questTitle: { fontSize: 24, marginBottom: 2, paddingTop: -200, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
   button: { backgroundColor: "#6c5ce7", padding: 12, borderRadius: 8, width: 200, marginVertical: 20 },
   buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
@@ -178,7 +180,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#f0f0f0",
     borderRadius: 12,
-    padding: 10,
+    padding: 20,
+    marginTop: 20,
     marginBottom: 20 // increase margin between cards
   },
   badgeIcon: { width: 80, height: 80, borderRadius: 40, marginBottom: 10 },
