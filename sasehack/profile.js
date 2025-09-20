@@ -13,6 +13,7 @@ export default function Profile({ navigation }) {
   const [completedQuests, setCompletedQuests] = useState([]);
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingQuests, setLoadingQuests] = useState(true);
+  const [activeTab, setActiveTab] = useState("quests");
 
   // Fetch user data
   useEffect(() => {
@@ -126,8 +127,9 @@ export default function Profile({ navigation }) {
         <Text style={styles.email}>{user.email}</Text>
         <Text style={styles.xp}>XP: {user.xp || 0}</Text>
         
-        <Text style = {{marginBottom: 20}}>
         <Text style={styles.sectionTitle}>Badges:</Text>
+        <Text style = {{marginBottom: 20}}>
+        
         <FlatList
           data={user.badges}
           renderItem={renderBadge}
@@ -139,25 +141,71 @@ export default function Profile({ navigation }) {
           style={{ height: 220}}
         />
         </Text>
-        
-        <Text style={styles.questTitle}>Completed Quests:</Text>
-        {loadingQuests ? (
-          <ActivityIndicator size="large" color="#007AFF" style={{ marginVertical: 20 }} />
-        ) : completedQuests.length === 0 ? (
-          <Text style={{ textAlign: "center", marginVertical: 20 }}>No completed quests yet!</Text>
-        ) : (
-          <View style={{ width: '100%', alignItems: 'center', paddingBottom: 20, }}>
-          {completedQuests.map((quest) => (
-            <View key={quest.id} style={{ marginBottom: 16, width: windowWidth * 0.8 }}>
-              {renderQuestBadge({ item: quest })}
-            </View>
-          ))}
+        <Text style={styles.questTitle}>Activity:</Text>
+         {/* Toggle Buttons */}
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={[styles.toggleButton, activeTab === "quests" && styles.activeButton]}
+              onPress={() => setActiveTab("quests")}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  activeTab === "quests" && styles.activeText,
+                ]}
+              >
+                Completed Quests
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.toggleButton, activeTab === "posts" && styles.activeButton]}
+              onPress={() => setActiveTab("posts")}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  activeTab === "posts" && styles.activeText,
+                ]}
+              >
+                Posts
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Conditional Content */}
+          {activeTab === "quests" ? (
+            loadingQuests ? (
+              <ActivityIndicator
+                size="large"
+                color="#007AFF"
+                style={{ marginVertical: 20 }}
+              />
+            ) : completedQuests.length === 0 ? (
+              <Text style={{ textAlign: "center", marginVertical: 20 }}>
+                No completed quests yet!
+              </Text>
+            ) : (
+              <View
+                style={{
+                  width: "100%",
+                  alignItems: "center",
+                  paddingBottom: 10,
+                }}
+              >
+                {completedQuests.map((quest) => (
+                  <View key={quest.id} style={{ marginBottom: 16, width: windowWidth * 0.8 }}>
+                    {renderQuestBadge({ item: quest })}
+                  </View>
+                ))}
+              </View>
+            )
+          ) : (
+            <Text style={{ textAlign: "center", marginVertical: 20 }}>
+              User’s posts will go here...
+            </Text>
+          )}
         </View>
-
-        )}
-
-       
-      </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -169,8 +217,8 @@ const styles = StyleSheet.create({
   name: { fontSize: 24, fontWeight: "bold" },
   email: { fontSize: 16, marginBottom: 8 },
   xp: { fontSize: 16, marginBottom: 12 },
-  sectionTitle: { fontSize: 24, marginBottom: 20, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
-  questTitle: { fontSize: 24, marginBottom: 2, paddingTop: -200, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
+  sectionTitle: { fontSize: 24, marginBottom: 5, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
+  questTitle: { fontSize: 24, marginBottom: 2, marginTop: 20, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
   button: { backgroundColor: "#6c5ce7", padding: 12, borderRadius: 8, width: 200, marginVertical: 20 },
   buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
   badgeContainer: {
@@ -193,8 +241,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f0f0",
     borderRadius: 12,
     padding: 10,
-    marginBottom: 12,
-    marginTop: 30,
+    marginBottom: 5,
+    marginTop: 10,
     alignItems: "center",
     
   },
@@ -203,4 +251,27 @@ const styles = StyleSheet.create({
   questBadgeDesc: { fontSize: 12, textAlign: "center", marginBottom: 4 },
   questBadgeProgress: { fontSize: 12 },
   questBadgeTier: { fontSize: 12, fontStyle: "italic" },
+  toggleContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginVertical: 20,
+  },
+  toggleButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#dfe6e9",
+  },
+  activeButton: {
+    backgroundColor: "#6c5ce7",
+  },
+  toggleText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2d3436",
+  },
+  activeText: {
+    color: "#fff",
+  }
 });
