@@ -223,9 +223,20 @@ export default function Questboard() {
         updates.badges = newBadgesMap;
       }
 
-  // Also append this quest id to user's completed quests array
-  // Use arrayUnion to avoid duplicates
-  await updateDoc(userRef, { ...updates, quests: arrayUnion({ questID: quest.id, completed: true })});
+    const existingQuests = userData.quests || [];
+    const questIndex = existingQuests.findIndex(q => q.questID === quest.id);
+
+    if (questIndex === -1) {
+      // Quest doesn't exist → add it
+      existingQuests.push({ questID: quest.id, completed: true });
+    } else {
+      // Quest exists → update completed to true
+      existingQuests[questIndex].completed = true;
+    }
+
+    updates.quests = existingQuests;
+
+    await updateDoc(userRef, updates);
 
       Alert.alert('Quest Completed!', `+${rewardXp} XP — Level ${newLevel}`);
       setModalVisible(false);
@@ -254,6 +265,19 @@ export default function Questboard() {
 
       const questRef = doc(db, "Quests", quest.id);
       await updateDoc(questRef, { posts: arrayUnion({ username, userIcon, description: newPostDesc, image: imageUrl, userId: user.uid }) });
+
+      // Add the quest to the user's quests array if it's not already there
+      const userRef = doc(db, "Users", user.uid);
+      const udoc = await getDoc(userRef);
+      const userData = udoc.exists() ? udoc.data() : {};
+      const existingQuests = userData.quests || [];
+      const questIndex = existingQuests.findIndex(q => q.questID === quest.id);
+
+      if (questIndex === -1) {
+        // Quest not present → add it with completed false
+        existingQuests.push({ questID: quest.id, completed: false });
+        await updateDoc(userRef, { quests: existingQuests });
+      }
 
       // clear composer and refresh
       setNewPostDesc("");

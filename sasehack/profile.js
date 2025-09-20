@@ -64,7 +64,9 @@ export default function Profile({ navigation }) {
     const completedQuestIds = userQuests
       .filter((q) => q.completed)
       .map((q) => q.questID);
+    setCompletedQuests(prev => prev.filter(q => completedQuestIds.includes(q.id)));
     console.log("Completed Quest IDs:", completedQuestIds);
+
     if (completedQuestIds.length === 0) {
       setCompletedQuests([]);
       setLoadingQuests(false);
@@ -262,12 +264,13 @@ const getCompletedQuestCountsByClass = () => {
               <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>User Stats</Text>
               <Text style={{ fontSize: 16 }}>XP: {user?.xp || 0}</Text>
               <Text style={{ fontSize: 16 }}>Badges Earned: {user?.badges?.length || 0}</Text>
-              <Text style={{ fontSize: 16 }}>Quests Completed: {completedQuests.length}</Text>
+              <Text style={{ fontSize: 16 }}>Posts Made: {userPosts.length}</Text>
               <Text style={{ fontSize: 16, marginTop: 10, fontWeight: "bold" }}>Completed Quests by Class:</Text>
               <Text style={{ fontSize: 16 }}>Artist: {questCounts.artist}</Text>
               <Text style={{ fontSize: 16 }}>Baker: {questCounts.baker}</Text>
               <Text style={{ fontSize: 16 }}>Explorer: {questCounts.explorer}</Text>
-              <Text style={{ fontSize: 16 }}>Posts Made: {userPosts.length}</Text>
+              <Text style={{ fontSize: 16 }}>Total Quests Completed: {completedQuests.length}</Text>
+              
             </View>
           )}
         </View>
