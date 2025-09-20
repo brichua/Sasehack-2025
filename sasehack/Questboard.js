@@ -159,8 +159,9 @@ export default function Questboard() {
         updates.badges = newBadgesMap;
       }
 
-      // Apply update to user document
-      await updateDoc(userRef, updates);
+  // Also append this quest id to user's completed quests array
+  // Use arrayUnion to avoid duplicates
+  await updateDoc(userRef, { ...updates, quests: arrayUnion(quest.id) });
 
       Alert.alert('Quest Completed!', `+${rewardXp} XP — Level ${newLevel}`);
       setModalVisible(false);
@@ -188,7 +189,7 @@ export default function Questboard() {
       } catch (e) { /* ignore */ }
 
       const questRef = doc(db, "Quests", quest.id);
-      await updateDoc(questRef, { posts: arrayUnion({ username, userIcon, description: newPostDesc, image: imageUrl }) });
+      await updateDoc(questRef, { posts: arrayUnion({ username, userIcon, description: newPostDesc, image: imageUrl, userId: user.uid }) });
 
       // clear composer and refresh
       setNewPostDesc("");
