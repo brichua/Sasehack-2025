@@ -8,6 +8,7 @@ import Signup from "./signup";
 import Profile from "./profile";
 import Guild from "./Guild";
 import Questboard from "./Questboard";
+import Map from "./Map";
 import { auth } from './firebase';
 import { View, TouchableOpacity, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -36,6 +37,7 @@ function MainTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Questboard" component={Questboard} />
+      <Tab.Screen name="Map" component={Map} />
       <Tab.Screen name="Guild" component={Guild} />
       <Tab.Screen name="Profile" component={Profile} />
       <Tab.Screen name="Logout" component={LogoutTab} />
