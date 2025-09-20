@@ -55,7 +55,7 @@ export default function SignIn({ navigation }) {
         <Text style={styles.buttonText}>Sign In</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate("CreateAccount")}>
+      <TouchableOpacity onPress={() => navigation.navigate("Signup")}>
         <Text style={{ color: "blue", textAlign: "center", marginTop: 10 }}>
           I don’t have an account
         </Text>
