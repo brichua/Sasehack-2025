@@ -10,7 +10,7 @@ export default function Profile({ route, navigation }) {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const docRef = doc(db, "users", userId);
+      const docRef = doc(db, "Users", userId);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) setUser(docSnap.data());
     };

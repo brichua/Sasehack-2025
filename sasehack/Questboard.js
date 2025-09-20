@@ -12,7 +12,7 @@ export default function Questboard({ route,navigation }) {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const userDoc = await getDoc(doc(db, "users", userId));
+      const userDoc = await getDoc(doc(db, "Users", userId));
       if (userDoc.exists()) {
         setDisplayName(userDoc.data().displayName);
       } else {
@@ -50,7 +50,7 @@ export default function Questboard({ route,navigation }) {
       await updateDoc(questRef, { assignedTo: arrayUnion(userId) });
 
       // Update user's XP and badges
-      const userRef = doc(db, "users", userId);
+      const userRef = doc(db, "Users", userId);
       await updateDoc(userRef, {
         xp: (quest.xpReward || 0) + (user.xp || 0),
         badges: quest.badgeReward ? arrayUnion(quest.badgeReward) : [],
