@@ -16,6 +16,7 @@ function MainTabs() {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Questboard" component={Questboard} />
       <Tab.Screen name="Profile" component={Profile} />
+      
     </Tab.Navigator>
   );
 }
