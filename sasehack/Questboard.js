@@ -13,23 +13,11 @@ export default function Questboard() {
   const [newPostImage, setNewPostImage] = useState(null);
   const [creatingQuest, setCreatingQuest] = useState(false);
 
-<<<<<<< Updated upstream
-  useEffect(() => {
-    const fetchUser = async () => {
-      const userDoc = await getDoc(doc(db, "Users", userId));
-      if (userDoc.exists()) {
-        setDisplayName(userDoc.data().displayName);
-      } else {
-        setDisplayName("Unknown User");
-      }
-    };
-=======
   const CLASSES = [
     { name: "Explorer", icon: "map" },
     { name: "Baker", icon: "cutlery" },
     { name: "Artist", icon: "paint-brush" },
   ];
->>>>>>> Stashed changes
 
   const BADGES = [
     { name: "Bakery Novice", class: "Baker" },
@@ -67,14 +55,6 @@ export default function Questboard() {
       const user = auth.currentUser;
       const questRef = doc(db, "Quests", quest.id);
 
-<<<<<<< Updated upstream
-      // Update user's XP and badges
-      const userRef = doc(db, "Users", userId);
-      await updateDoc(userRef, {
-        xp: (quest.xpReward || 0) + (user.xp || 0),
-        badges: quest.badgeReward ? arrayUnion(quest.badgeReward) : [],
-      });
-=======
       if(newPostDesc) {
         let imageUrl = null;
         if(newPostImage) {
@@ -83,7 +63,6 @@ export default function Questboard() {
         await updateDoc(questRef, { posts: arrayUnion({ username:user.displayName, userIcon:"", description:newPostDesc, image:imageUrl }) });
         setNewPostDesc(""); setNewPostImage(null);
       }
->>>>>>> Stashed changes
 
       const userRef = doc(db, "users", user.uid);
       await updateDoc(userRef, { xp: arrayUnion(quest.rewards.xp) });
