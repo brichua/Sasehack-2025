@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Modal, ScrollView, TextInput, Alert, Platform } from "react-native";
+import * as Location from 'expo-location';
 import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 import { db, auth } from "./firebase";
 import googleConfig from './googleConfig';
@@ -43,6 +44,14 @@ export default function Questboard() {
     startDate: null,
     endDate: null,
   });
+  // Filter states
+  const [classFilterModal, setClassFilterModal] = useState(false);
+  const [locationFilterModal, setLocationFilterModal] = useState(false);
+  const [timeFilterModal, setTimeFilterModal] = useState(false);
+
+  const [selectedClasses, setSelectedClasses] = useState([]); // array of class names
+  const [locationFilter, setLocationFilter] = useState({ coords: null, radiusKm: 5 });
+  const [timeFilterDate, setTimeFilterDate] = useState(null); // ISO string
   const [placeQuery, setPlaceQuery] = useState("");
   const [predictions, setPredictions] = useState([]);
   const [filteredBadges, setFilteredBadges] = useState([]);
@@ -57,6 +66,61 @@ export default function Questboard() {
   };
 
   useEffect(() => { fetchQuests(); }, []);
+
+  // Helper: Haversine distance in km between two coords {lat,lng}
+  const haversineKm = (a, b) => {
+    if (!a || !b) return Infinity;
+    const toRad = (v) => (v * Math.PI) / 180;
+    const R = 6371; // km
+    const dLat = toRad(b.lat - a.lat);
+    const dLon = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const sinDLat = Math.sin(dLat / 2);
+    const sinDLon = Math.sin(dLon / 2);
+    const aHarv = sinDLat * sinDLat + sinDLon * sinDLon * Math.cos(lat1) * Math.cos(lat2);
+    const c = 2 * Math.atan2(Math.sqrt(aHarv), Math.sqrt(1 - aHarv));
+    return R * c;
+  };
+
+  // Compute filtered quests based on active filters
+  const computeFiltered = () => {
+    return quests.filter(q => {
+      // class filter
+      if (selectedClasses.length > 0 && (!q.class || !selectedClasses.includes(q.class))) return false;
+
+      // location filter
+      if (locationFilter && locationFilter.coords) {
+        const qCoords = q.placeCoords || null;
+        if (!qCoords) return false;
+        const dist = haversineKm(locationFilter.coords, { lat: qCoords.lat, lng: qCoords.lng });
+        if (dist > (locationFilter.radiusKm || 0)) return false;
+      }
+
+      // time filter: check if the selected date is within quest's start/end (inclusive)
+      if (timeFilterDate) {
+        const target = new Date(timeFilterDate);
+        if (q.startDate || q.endDate) {
+          const s = q.startDate ? new Date(q.startDate) : null;
+          const e = q.endDate ? new Date(q.endDate) : null;
+          // if both null, skip (should not happen)
+          if (s && e) {
+            if (target < s || target > e) return false;
+          } else if (s && !e) {
+            if (target < s) return false;
+          } else if (!s && e) {
+            if (target > e) return false;
+          } else {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  };
 
   const pickImage = async (setter) => {
     let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing:true, aspect:[1,1], quality:0.5 });
@@ -304,8 +368,23 @@ export default function Questboard() {
         <Text style={styles.buttonText}>Create New Quest</Text>
       </TouchableOpacity>
 
+      {/* Top filter bar */}
+      <View style={{flexDirection:'row', justifyContent:'space-around', marginBottom:8}}>
+        <TouchableOpacity style={[styles.buttonSmall,{backgroundColor: selectedClasses.length>0 ? '#0984e3' : '#6c5ce7'}]} onPress={()=>setClassFilterModal(true)}>
+          <Text style={styles.buttonText}>Class</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.buttonSmall,{backgroundColor: locationFilter && locationFilter.coords ? '#0984e3' : '#6c5ce7'}]} onPress={()=>setLocationFilterModal(true)}>
+          <Text style={styles.buttonText}>Location</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.buttonSmall,{backgroundColor: timeFilterDate ? '#0984e3' : '#6c5ce7'}]} onPress={()=>setTimeFilterModal(true)}>
+          <Text style={styles.buttonText}>Time</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
-        data={quests}
+        data={computeFiltered()}
         keyExtractor={(item)=>item.id}
         renderItem={renderQuestCard}
       />
@@ -369,6 +448,106 @@ export default function Questboard() {
             </View>
           </>}
         </ScrollView>
+      </Modal>
+
+      {/* Class Filter Modal */}
+      <Modal visible={classFilterModal} animationType="slide" transparent={true}>
+        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center'}}>
+          <View style={{margin:20, backgroundColor:'#fff', borderRadius:8, padding:12}}>
+            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8}}>Filter by Class</Text>
+            {CLASSES.map(c => (
+              <TouchableOpacity key={c.name} style={{flexDirection:'row',alignItems:'center',padding:8}} onPress={()=>{
+                setSelectedClasses(prev => prev.includes(c.name) ? prev.filter(x=>x!==c.name) : [...prev, c.name]);
+              }}>
+                <View style={{width:22,height:22,borderRadius:4, borderWidth:1, borderColor:'#666', marginRight:10, backgroundColor: selectedClasses.includes(c.name) ? '#6c5ce7' : '#fff'}} />
+                <Text>{c.name}</Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
+              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:'#b2bec3'}]} onPress={()=>{ setSelectedClasses([]); setClassFilterModal(false); }}>
+                <Text style={styles.buttonText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:'#6c5ce7'}]} onPress={()=>setClassFilterModal(false)}>
+                <Text style={styles.buttonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Location Filter Modal */}
+      <Modal visible={locationFilterModal} animationType="slide" transparent={true}>
+        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center'}}>
+          <View style={{margin:20, backgroundColor:'#fff', borderRadius:8, padding:12}}>
+            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8}}>Filter by Location</Text>
+
+            <TouchableOpacity style={[styles.button,{backgroundColor:'#0984e3'}]} onPress={async ()=>{
+              try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                  Alert.alert('Permission denied', 'Location permission is required to use this filter.');
+                  return;
+                }
+                const pos = await Location.getCurrentPositionAsync({});
+                const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                setLocationFilter(prev=> ({...prev, coords: c}));
+              } catch (err) {
+                console.warn('expo-location error', err);
+                Alert.alert('Location error', err.message || 'Unable to get location');
+              }
+            }}>
+              <Text style={styles.buttonText}>Use My Location</Text>
+            </TouchableOpacity>
+
+            <Text style={{marginTop:10}}>Radius (km)</Text>
+            <TextInput keyboardType='numeric' value={String(locationFilter.radiusKm)} onChangeText={(t)=>{
+              const v = Number(t) || 0; setLocationFilter(prev=> ({...prev, radiusKm: v}));
+            }} style={styles.input} />
+
+            <Text style={{marginTop:8}}>Current: {locationFilter.coords ? `${locationFilter.coords.lat.toFixed(4)}, ${locationFilter.coords.lng.toFixed(4)}` : 'Not set'}</Text>
+
+            <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
+              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:'#b2bec3'}]} onPress={()=>{ setLocationFilter({coords:null, radiusKm:5}); setLocationFilterModal(false); }}>
+                <Text style={styles.buttonText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:'#6c5ce7'}]} onPress={()=>setLocationFilterModal(false)}>
+                <Text style={styles.buttonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Time Filter Modal */}
+      <Modal visible={timeFilterModal} animationType="slide" transparent={true}>
+        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center'}}>
+          <View style={{margin:20, backgroundColor:'#fff', borderRadius:8, padding:12}}>
+            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8}}>Filter by Date</Text>
+            <TouchableOpacity style={[styles.button,{backgroundColor:'#74b9ff'}]} onPress={()=>setTimeFilterDate(new Date().toISOString())}>
+              <Text style={styles.buttonText}>Set to Today</Text>
+            </TouchableOpacity>
+
+            <View style={{marginTop:10}}>
+              <Text>Selected: {timeFilterDate ? (new Date(timeFilterDate)).toLocaleDateString() : 'Any date'}</Text>
+            </View>
+
+            <View style={{marginTop:8}}>
+              <DateTimePicker value={timeFilterDate ? new Date(timeFilterDate) : new Date()} mode="date" display="default" onChange={(e, d)=>{
+                if (d) setTimeFilterDate(d.toISOString());
+              }} />
+            </View>
+
+            <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
+              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:'#b2bec3'}]} onPress={()=>{ setTimeFilterDate(null); setTimeFilterModal(false); }}>
+                <Text style={styles.buttonText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:'#6c5ce7'}]} onPress={()=>setTimeFilterModal(false)}>
+                <Text style={styles.buttonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Create Quest Modal */}
