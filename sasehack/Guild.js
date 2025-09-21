@@ -600,7 +600,7 @@ export default function Guilds() {
       <View style={{marginTop:10, marginBottom:6}}>
         <Text style={{fontWeight:'700', color: colors.textDark}}>Search</Text>
         <View style={{flexDirection:'row', alignItems:'center', marginTop:6}}>
-          <TextInput placeholder='Search guilds by name' value={nameQuery} onChangeText={t=>setNameQuery(t)} style={[styles.input, {flex:1, marginRight:8}]} />
+          <TextInput placeholder='Search guilds by name' value={nameQuery} onChangeText={t=>setNameQuery(t)} style={[styles.input2, {flex:1, marginRight:8}]} />
           {nameQuery ? (
             <TouchableOpacity style={[styles.buttonSmall, {backgroundColor: colors.cambridgeBlue}]} onPress={()=>setNameQuery('')}>
               <Text style={styles.buttonText}>Clear</Text>

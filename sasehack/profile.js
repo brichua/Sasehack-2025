@@ -371,6 +371,23 @@ const getCompletedQuestCountsByClass = () => {
     return list;
   })();
 
+  const topClass = computeTopClass(user?.class);
+
+  // helper to map counts to color buckets
+  const getCountColor = (count, type) => {
+    // buckets: 1-4 => base color, 5-9 => darker, 10+ => darkest
+    const n = Number(count) || 0;
+    const base = (type === 'badges') ? colors.mintGreen : (type === 'quests') ? colors.mintGreen : colors.mintGreen;
+    // produce slightly darker variations by returning different hardcoded colors
+    if (n >= 10) {
+      return type === 'badges' ? '#6B9080' : type === 'quests' ? '#6B9080' : '#6B9080';
+    }
+    if (n >= 5) {
+      return type === 'badges' ? '#A4C3B2' : type === 'quests' ? '#A4C3B2' : '#A4C3B2';
+    }
+    return base;
+  };
+
   // badge tier counts
   const badgeTierCounts = (() => {
     const badges = user?.badges || {};
@@ -382,6 +399,10 @@ const getCompletedQuestCountsByClass = () => {
     }
     return { t1, t2, t3, t4 };
   })();
+  // counts for stats icons
+  const badgeCount = user?.badges ? (Array.isArray(user.badges) ? user.badges.length : Object.keys(user.badges).length) : 0;
+  const questsCount = completedQuests.length || 0;
+  const postsCount = userPosts.length || 0;
  
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.azureWeb }}>
@@ -404,9 +425,10 @@ const getCompletedQuestCountsByClass = () => {
               <View style={[styles.levelTag, {backgroundColor: colors.viridian}]}> 
                 <Text style={styles.levelText}>Lv {computeLevel(user?.xp).level}</Text>
               </View>
-              {computeTopClass(user?.class) ? (
-                <View style={[styles.classTag, computeTopClass(user?.class).toLowerCase()==='explorer' ? {backgroundColor: colors.viridian} : computeTopClass(user?.class).toLowerCase()==='baker' ? {backgroundColor: colors.cambridgeBlue} : {backgroundColor: colors.mintGreen}]}>
-                  <Text style={styles.classText}>{computeTopClass(user?.class)}</Text>
+              {topClass ? (
+                <View style={[styles.classTag, topClass.toLowerCase()==='explorer' ? {backgroundColor: colors.viridian} : topClass.toLowerCase()==='baker' ? {backgroundColor: colors.cambridgeBlue} : {backgroundColor: colors.mintGreen}]}>
+                  <FontAwesome name={CLASS_ICONS[topClass] || 'star'} size={14} color="#fff" style={{marginRight:6}} />
+                  <Text style={styles.classText}>{topClass}</Text>
                 </View>
               ) : null}
             </View>
@@ -493,20 +515,20 @@ const getCompletedQuestCountsByClass = () => {
               {/* Row: badges / quests / posts */}
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
-                  <FontAwesome6 name={'trophy'} size={28} color={colors.viridian} solid />
-                  <Text style={styles.statNumber}>{user?.badges ? Object.keys(user.badges).length : 0}</Text>
+                  <FontAwesome6 name={'trophy'} size={28} color={getCountColor(badgeCount, 'badges')} solid />
+                  <Text style={styles.statNumber}>{badgeCount}</Text>
                   <Text style={styles.statLabel}>Badges</Text>
                 </View>
 
                 <View style={styles.statItem}>
-                  <FontAwesome name={'check-circle'} size={28} color={colors.cambridgeBlue} />
-                  <Text style={styles.statNumber}>{completedQuests.length}</Text>
+                  <FontAwesome name={'check-circle'} size={28} color={getCountColor(questsCount, 'quests')} />
+                  <Text style={styles.statNumber}>{questsCount}</Text>
                   <Text style={styles.statLabel}>Quests</Text>
                 </View>
 
                 <View style={styles.statItem}>
-                  <FontAwesome name={'pencil'} size={28} color={colors.mintGreen} />
-                  <Text style={styles.statNumber}>{userPosts.length}</Text>
+                  <FontAwesome name={'pencil'} size={28} color={getCountColor(postsCount, 'posts')} />
+                  <Text style={styles.statNumber}>{postsCount}</Text>
                   <Text style={styles.statLabel}>Posts</Text>
                 </View>
               </View>
@@ -754,7 +776,7 @@ const styles = StyleSheet.create({
   badgeProgressPct: { marginLeft:8, fontSize:12, color:'#456', width:40, textAlign:'right' },
   levelTag: { backgroundColor: '#6b9080', paddingHorizontal:8, paddingVertical:4, borderRadius:8, marginLeft:8},
   levelText: { color:'#fff', fontWeight:'700' },
-  classTag: { backgroundColor:'#a4c3b2', paddingHorizontal:8, paddingVertical:4, borderRadius:8, marginLeft:8 },
+  classTag: { flexDirection: 'row', alignItems: 'center', backgroundColor:'#a4c3b2', paddingHorizontal:8, paddingVertical:4, borderRadius:8, marginLeft:8 },
   classText: { color:'#fff', fontWeight:'700' },
   xpRow: { flexDirection:'row', alignItems:'center', marginTop:8 },
   xpBarBg: { height:12, width:180, backgroundColor:'#e6f0ec', borderRadius:8, overflow:'hidden', marginRight:8 },
