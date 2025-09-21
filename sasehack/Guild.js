@@ -391,8 +391,6 @@ export default function Guilds() {
                                                                 </View>
         </View>
 
-        {item.location ? <Text style={styles.metaText}>Location: {item.location}{item.placeCoords ? ` (${item.placeCoords.lat.toFixed(3)}, ${item.placeCoords.lng.toFixed(3)})` : ''}</Text> : null}
-
         <View style={{flexDirection:'row', alignItems:'center', marginTop:10}}>
                   {item.user?.icon ? <Image source={{uri:item.user.icon}} style={styles.avatarSmall} /> : null}
                   <Text style={styles.metaText}>{item.user?.name || '—'}</Text>
