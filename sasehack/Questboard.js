@@ -7,6 +7,7 @@ import googleConfig from './googleConfig';
 import * as ImagePicker from "expo-image-picker";
 import { FontAwesome } from "@expo/vector-icons";
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Questboard() {
   const [quests, setQuests] = useState([]);
