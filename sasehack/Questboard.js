@@ -19,7 +19,7 @@ import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, getDoc } from 
 import { db, auth } from "./firebase";
 import googleConfig from './googleConfig';
 import * as ImagePicker from "expo-image-picker";
-import { FontAwesome } from "@expo/vector-icons";
+import { FontAwesome, FontAwesome5 } from "@expo/vector-icons";
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function Questboard() {
@@ -36,8 +36,30 @@ export default function Questboard() {
 
   const CLASS_ICONS = {
   Explorer: 'map',
-  Baker: 'cutlery',
-  Artist: 'paint-brush'
+  Baker: 'utensils',
+  Artist: 'paintbrush',
+  Performer: 'masks-theater',
+  Musician: 'music',
+  Foodie: 'utensils',
+  Historian: 'landmark',
+  Connector: 'champagne-glasses'
+  };
+
+  // common alias map for icon names across FA versions (fallbacks)
+  const ICON_ALIASES = {
+    'paintbrush': 'paint-brush',
+    'brush': 'paint-brush',
+    'person-hiking': 'hiking',
+    'kitchen-set': 'utensils',
+    'cake-candles': 'birthday-cake',
+    'mug-hot': 'coffee',
+    'building-columns': 'university',
+    'gifts': 'gift'
+  };
+
+  const normalizeIcon = (name) => {
+    if (!name) return name;
+    return ICON_ALIASES[name] || name;
   };
 
   const [quests, setQuests] = useState([]);
@@ -51,17 +73,43 @@ export default function Questboard() {
 
   const CLASSES = [
     { name: "Explorer", icon: "map" },
-    { name: "Baker", icon: "cutlery" },
-    { name: "Artist", icon: "paint-brush" },
+    { name: "Artist", icon: "paintbrush" },
+    { name: "Performer", icon: "masks-theater" },
+    { name: "Musician", icon: "music" },
+    { name: "Foodie", icon: "utensils" },
+    { name: "Historian", icon: "landmark" },
+    { name: "Connector", icon: "champagne-glasses" }
   ];
 
   const BADGES = [
-    { name: "Bakery Novice", class: "Baker" },
-    { name: "Bakery Expert", class: "Baker" },
-    { name: "City Explorer", class: "Explorer" },
-    { name: "Museum Visitor", class: "Explorer" },
-    { name: "Sketcher", class: "Artist" },
+    { name: "Trailblazer", class: "Explorer", icon: 'person-hiking' },
+    { name: "Urban Explorer", class: "Explorer", icon: 'city' },
+
+    { name: "Sketcher", class: "Artist", icon: 'brush' },
+    { name: "Hands-on Artist", class: "Artist", icon: 'cube' },
+    { name: "Creative Spark", class: "Artist", icon: 'palette' },
+
+    { name: "Film Buff", class: "Performer", icon: 'film' },
+    { name: "Broadway Bound", class: "Performer", icon: 'masks-theater' },
+    { name: "Theater Aficionado", class: "Performer", icon: 'ticket' },
+
+    { name: "Future Virtuoso", class: "Musician", icon: 'guitar' },
+    { name: "Concert Connoisseur", class: "Musician", icon: 'music' },
+
+    { name: "Chef", class: "Foodie", icon: 'kitchen-set' },
+    { name: "Baker", class: "Foodie", icon: 'cake-candles' },
+    { name: "Taste Tester", class: "Foodie", icon: 'pizza-slice' },
+    { name: "Something Sweet", class: "Foodie", icon: 'mug-hot' },
+
+    { name: "Time Traveler", class: "Historian", icon: 'archway' },
+    { name: "Walking through Time", class: "Historian", icon: 'building-columns' },
+
+    { name: "Social Butterfly", class: "Connector", icon: 'gifts' },
+    { name: "Community Enthusiast", class: "Connector", icon: 'calendar' }
   ];
+
+  // quick lookup map for badge icons by badge name
+  const BADGE_ICONS = BADGES.reduce((m, b) => { m[b.name] = b.icon || null; return m; }, {});
 
   const [newQuest, setNewQuest] = useState({
     title: "",
@@ -430,7 +478,7 @@ export default function Questboard() {
         <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
           {ended ? <Text style={styles.endedTag}>ENDED</Text> : null}
           <View style={{width:36,height:36,borderRadius:18,backgroundColor:COLORS.viridian,alignItems:'center',justifyContent:'center',marginRight:8}}>
-            <FontAwesome name={(CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon} size={16} color={COLORS.mintCream} />
+            <FontAwesome5 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={16} color={COLORS.mintCream} solid />
           </View>
           <Text style={styles.title}>{item.title}</Text>
         </View>
@@ -445,8 +493,11 @@ export default function Questboard() {
             <Text style={[styles.metaText,{marginLeft:8}]}>{item.rewards?.xp ?? 0} XP</Text>
           </View>
           <View style={{flexDirection:'row', alignItems:'center'}}>
-            <FontAwesome name='trophy' size={14} color={COLORS.viridian} />
-            <Text style={[styles.metaText,{marginLeft:8}]}>{item.rewards?.badge || 'None'}</Text>
+            { item.rewards?.badge && BADGE_ICONS[item.rewards.badge] ? (
+              <FontAwesome5 name={normalizeIcon(BADGE_ICONS[item.rewards.badge])} size={16} color={COLORS.viridian} solid />
+            ) : (
+              <FontAwesome name='trophy' size={16} color={COLORS.viridian} />
+            ) }
           </View>
         </View>
 
@@ -501,7 +552,7 @@ export default function Questboard() {
                       {selectedQuest.image ? <Image source={{uri:selectedQuest.image}} style={{width:'100%',height:220,borderRadius:8,marginBottom:12}} /> : null}
                       <View style={{flexDirection:'row', alignItems:'center', marginTop:0}}>
                         <View style={{width:40,height:40,borderRadius:20,backgroundColor: COLORS.viridian,alignItems:'center',justifyContent:'center',marginRight:12}}>
-                          <FontAwesome name={CLASS_ICONS[selectedQuest.class] || 'map-o'} size={18} color="#fff" />
+                          <FontAwesome5 name={normalizeIcon(CLASS_ICONS[selectedQuest.class] || 'map-o')} size={18} color="#fff" solid />
                         </View>
                         <Text style={{fontSize:22,fontWeight:'800', color: COLORS.textDark, flexShrink:1}}>{selectedQuest.title}</Text>
                       </View>
@@ -524,7 +575,11 @@ export default function Questboard() {
                             <Text style={{marginLeft:8, color: COLORS.textMuted}}>{selectedQuest.rewards?.xp || 0} XP</Text>
                           </View>
                           <View style={{flexDirection:'row', alignItems:'center'}}>
-                            <FontAwesome name='trophy' size={16} color={COLORS.viridian} />
+                            { selectedQuest.rewards?.badge && BADGE_ICONS[selectedQuest.rewards.badge] ? (
+                              <FontAwesome5 name={normalizeIcon(BADGE_ICONS[selectedQuest.rewards.badge])} size={16} color={COLORS.viridian} solid />
+                            ) : (
+                              <FontAwesome name='trophy' size={16} color={COLORS.viridian} />
+                            ) }
                             <Text style={{marginLeft:8, color: COLORS.textMuted}}>{selectedQuest.rewards?.badge || 'None'}</Text>
                           </View>
                         </View>
@@ -603,6 +658,7 @@ export default function Questboard() {
               {CLASSES.map(c => (
                 <TouchableOpacity key={c.name} style={styles.sheetRow} onPress={()=>{ setSelectedClasses(prev => prev.includes(c.name) ? prev.filter(x=>x!==c.name) : [...prev, c.name]); }}>
                   <View style={[styles.checkbox, selectedClasses.includes(c.name) && {backgroundColor:COLORS.viridian, borderColor: COLORS.viridian}]} />
+                  <FontAwesome5 name={normalizeIcon(c.icon)} size={16} color={COLORS.viridian} solid style={{marginRight:10}} />
                   <Text style={styles.sheetText}>{c.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -720,11 +776,11 @@ export default function Questboard() {
 
               {/* Class Picker */}
               <Text style={{marginTop:10, fontWeight:"bold"}}>Select Class:</Text>
-              <View style={{flexDirection:"row", marginVertical:5}}>
+              <View style={{flexDirection:"row", marginVertical:5, flexWrap:'wrap', justifyContent:'space-between'}}>
                 {CLASSES.map((c) => (
                   <TouchableOpacity key={c.name} style={newQuest.class === c.name ? styles.classSelected : styles.classOption} onPress={() => { setNewQuest({...newQuest,class:c.name}); setFilteredBadges(BADGES.filter(b => b.class === c.name)); setNewQuest(prev => ({...prev, badge:""})); }}>
-                    <FontAwesome name={c.icon} size={22} color={COLORS.text} />
-                    <Text style={{color:COLORS.text}}>{c.name}</Text>
+                    <FontAwesome5 name={normalizeIcon(c.icon)} size={22} color={COLORS.text} solid />
+                    <Text style={{color:COLORS.text, marginTop:6, textAlign:'center'}}>{c.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -734,7 +790,6 @@ export default function Questboard() {
               <View style={{flexDirection:"row", marginVertical:5}}>
                 {[1,2,3].map((star)=>( <TouchableOpacity key={star} onPress={()=>setNewQuest({...newQuest,difficulty:star})}><FontAwesome name={star <= newQuest.difficulty ? "star" : "star-o"} size={28} color="#A4C3B2" style={{marginRight:8}} /></TouchableOpacity> ))}
               </View>
-              <Text>XP Reward: {newQuest.difficulty*10}</Text>
 
               {/* Badge Picker */}
               {filteredBadges.length > 0 && (
@@ -743,7 +798,10 @@ export default function Questboard() {
                   <View style={{flexDirection:"row", flexWrap:"wrap"}}>
                     {filteredBadges.map(b => (
                       <TouchableOpacity key={b.name} style={newQuest.badge === b.name ? styles.badgeSelected : styles.badgeOption} onPress={()=>setNewQuest({...newQuest,badge:b.name})}>
-                        <Text style={{color:COLORS.text}}>{b.name}</Text>
+                        <View style={{flexDirection:'row', alignItems:'center'}}>
+                          { (b.icon || BADGE_ICONS[b.name]) ? <FontAwesome5 name={normalizeIcon(b.icon || BADGE_ICONS[b.name])} size={16} color={COLORS.viridian} solid style={{marginRight:8}} /> : null }
+                          <Text style={{color:COLORS.text}}>{b.name}</Text>
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -834,8 +892,8 @@ const styles = StyleSheet.create({
   checkbox: { width:22, height:22, borderRadius:6, borderWidth:1, borderColor:'#888', marginRight:10, backgroundColor:'#fff' },
   sheetText: { color:'#234' },
 
-  classOption: { padding:10, marginRight:10, borderWidth:1, borderColor:'#e6e6e6', borderRadius:10, alignItems:'center', width:88 },
-  classSelected: { padding:10, marginRight:10, borderWidth:2, borderColor:'#6b9080ff', borderRadius:10, backgroundColor:'#f6fff8ff', alignItems:'center', width:88 },
+  classOption: { padding:12, marginBottom:10, borderWidth:1, borderColor:'#e6e6e6', borderRadius:10, alignItems:'center', width:'30%' },
+  classSelected: { padding:12, marginBottom:10, borderWidth:2, borderColor:'#6b9080ff', borderRadius:10, backgroundColor:'#f6fff8ff', alignItems:'center', width:'30%' },
 
   badgeOption: { padding:8, borderWidth:1, borderColor:'#e6e6e6', borderRadius:10, margin:6 },
   badgeSelected: { padding:8, borderWidth:2, borderColor:'#6b9080ff', borderRadius:10, margin:6, backgroundColor:'#f6fff8ff' }

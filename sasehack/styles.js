@@ -38,6 +38,13 @@ export default StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  
+  modalBackdrop: { flex:1, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center' },
+  sheet: { marginHorizontal:18, borderRadius:12, padding:14, shadowColor:'#000', shadowOpacity:0.08, shadowRadius:10, elevation:6 },
+  sheetTitle: { fontSize:18, fontWeight:'700', marginBottom:8 },
+  sheetRow: { flexDirection:'row', alignItems:'center', paddingVertical:8 },
+  checkbox: { width:22, height:22, borderRadius:6, borderWidth:1, borderColor:'#888', marginRight:10, backgroundColor:'#fff' },
+  sheetText: { color:'#234' },
   buttonPrimary: { padding:12, borderRadius:10, backgroundColor:"#6b9080ff", marginVertical:8, alignItems:'center' },
   buttonSecondary: { padding:12, borderRadius:10, backgroundColor:"#a4c3b2ff", marginVertical:8, alignItems:'center' },
   buttonTertiary: { padding:12, borderRadius:10, backgroundColor:"#cbd6cf", marginVertical:8, alignItems:'center' },

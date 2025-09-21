@@ -4,7 +4,7 @@ import styles, { colors } from './styles';
 import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, getDoc, arrayRemove } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import * as ImagePicker from 'expo-image-picker';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, FontAwesome5 } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import googleConfig from './googleConfig';
 
@@ -21,14 +21,91 @@ export default function Guilds() {
   const [newGuildIcon, setNewGuildIcon] = useState(null);
   const [quests, setQuests] = useState([]);
 
-  const CLASSES = [ { name: 'Explorer', icon: 'map' }, { name: 'Baker', icon: 'cutlery' }, { name: 'Artist', icon: 'paint-brush' } ];
-  const BADGES = [
-    { name: 'Bakery Novice', class: 'Baker' },
-    { name: 'Bakery Expert', class: 'Baker' },
-    { name: 'City Explorer', class: 'Explorer' },
-    { name: 'Museum Visitor', class: 'Explorer' },
-    { name: 'Sketcher', class: 'Artist' },
+  const CLASSES = [
+    { name: 'Explorer', icon: 'map' },
+    { name: 'Artist', icon: 'paintbrush' },
+    { name: 'Performer', icon: 'masks-theater' },
+    { name: 'Musician', icon: 'music' },
+    { name: 'Foodie', icon: 'utensils' },
+    { name: 'Historian', icon: 'landmark' },
+    { name: 'Connector', icon: 'champagne-glasses' },
   ];
+
+  const BADGES = [
+    // Explorer
+    { name: 'Trailblazer', class: 'Explorer', icon: 'person-hiking' },
+    { name: 'Urban Explorer', class: 'Explorer', icon: 'city' },
+    // Artist
+    { name: 'Sketcher', class: 'Artist', icon: 'brush' },
+    { name: 'Hands-on Artist', class: 'Artist', icon: 'cube' },
+    { name: 'Creative Spark', class: 'Artist', icon: 'palette' },
+    // Performer
+    { name: 'Film Buff', class: 'Performer', icon: 'film' },
+    { name: 'Broadway Bound', class: 'Performer', icon: 'masks-theater' },
+    { name: 'Theater Aficionado', class: 'Performer', icon: 'ticket' },
+    // Musician
+    { name: 'Future Virtuoso', class: 'Musician', icon: 'guitar' },
+    { name: 'Concert Connoisseur', class: 'Musician', icon: 'music' },
+    // Foodie
+    { name: 'Chef', class: 'Foodie', icon: 'kitchen-set' },
+    { name: 'Baker', class: 'Foodie', icon: 'cake-candles' },
+    { name: 'Taste Tester', class: 'Foodie', icon: 'pizza-slice' },
+    { name: 'Something Sweet', class: 'Foodie', icon: 'mug-hot' },
+    // Historian
+    { name: 'Time Traveler', class: 'Historian', icon: 'archway' },
+    { name: 'Walking through Time', class: 'Historian', icon: 'building-columns' },
+    // Connector
+    { name: 'Social Butterfly', class: 'Connector', icon: 'gifts' },
+    { name: 'Community Enthusiast', class: 'Connector', icon: 'calendar' },
+    { name: 'Stadium Regular', class: 'Connector', icon: 'football' },
+  ];
+
+  // Icon aliasing to handle FontAwesome name differences
+  const ICON_ALIASES = {
+    'cutlery': 'utensils',
+    'map': 'map',
+    'paint-brush': 'paintbrush',
+    'paintbrush': 'paintbrush',
+    'guitar': 'guitar',
+    'music': 'music',
+    'cookie-bite': 'cookie-bite',
+    'cookie': 'cookie',
+    'bread-slice': 'bread-slice',
+    'birthday-cake': 'cake-candles',
+    'mug-hot': 'mug-hot',
+    'city': 'city',
+    'landmark': 'landmark',
+    'route': 'route',
+    'pen-nib': 'pen-nib',
+    'spray-can': 'spray-can',
+    'theater-masks': 'masks-theater',
+    'masks-theater': 'masks-theater',
+    'star': 'star',
+    'monument': 'monument',
+    'book': 'book',
+    'hands-helping': 'hands-helping',
+    'user-friends': 'user-friends',
+    'paintbrush': 'paintbrush',
+    'brush': 'brush',
+    'person-hiking': 'person-hiking',
+    'palette': 'palette',
+    'cube': 'cube',
+    'film': 'film',
+    'ticket': 'ticket',
+    'kitchen-set': 'kitchen-set',
+    'cake-candles': 'cake-candles',
+    'pizza-slice': 'pizza-slice',
+    'archway': 'archway',
+    'building-columns': 'building-columns',
+    'champagne-glasses': 'champagne-glasses',
+    'gifts': 'gifts',
+    'calendar': 'calendar',
+    'football': 'football'
+  };
+
+  const normalizeIcon = (name) => ICON_ALIASES[name] || name || 'question';
+
+  const BADGE_ICONS = BADGES.reduce((m,b)=>{ m[b.name] = b.icon || 'trophy'; return m; }, {});
 
   // UI state: view mode and filters
   const [viewMode, setViewMode] = useState('discover'); // 'discover' or 'my'
@@ -158,14 +235,57 @@ export default function Guilds() {
     return quests.filter(q => (q.guildId === g.id) || (q.class === g.class && q.guildId === g.id));
   };
 
+  const formatDateShort = (input) => {
+    if (!input) return "";
+    try { if (input.toDate && typeof input.toDate === 'function') return new Date(input.toDate()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch(e){}
+    if (input instanceof Date) return input.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    try { const d = new Date(input); if (!isNaN(d.getTime())) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch(e){}
+    return "";
+  };
+
   const renderQuestCard = ({ item }) => {
+    const start = item.startDate ? formatDateShort(item.startDate) : null;
+    const end = item.endDate ? formatDateShort(item.endDate) : null;
+    const dateRangeText = start && end ? `${start} — ${end}` : start ? `From ${start}` : end ? `Until ${end}` : null;
+    const ended = item.endDate ? (new Date(item.endDate) < new Date()) : false;
+
     return (
-      <TouchableOpacity style={styles.card} onPress={()=>{ /* could open quest detail */ }}>
-        {item.image ? <Image source={{uri:item.image}} style={{width:'100%',height:120,borderRadius:8,marginBottom:8}} /> : null}
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={{color:'#555'}}>{item.description?.slice(0,80)}...</Text>
-        <Text style={{marginTop:6}}>Class: {item.class} | XP: {item.rewards?.xp || 0}</Text>
-      </TouchableOpacity>
+      <View style={[styles.card]}>
+        {item.image ? <Image source={{uri:item.image}} style={styles.cardImage} /> : null}
+
+        <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
+          {ended ? <Text style={styles.endedTag}>ENDED</Text> : null}
+          <View style={{width:36,height:36,borderRadius:18,backgroundColor:colors.viridian,alignItems:'center',justifyContent:'center',marginRight:8}}>
+            <FontAwesome5 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={16} color={colors.mintCream} solid />
+          </View>
+          <Text style={styles.title}>{item.title}</Text>
+        </View>
+
+        {dateRangeText ? <Text style={styles.dateRange}>{dateRangeText}</Text> : null}
+
+        <Text style={styles.mutedText}>{(item.description || '').slice(0,80)}{(item.description || '').length>80 ? "..." : ""}</Text>
+
+        <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:8, alignItems:'center'}}>
+          <View style={{flexDirection:'row', alignItems:'center'}}>
+            <FontAwesome name='bolt' size={14} color={colors.viridian} />
+            <Text style={[styles.metaText,{marginLeft:8}]}>{item.rewards?.xp ?? 0} XP</Text>
+          </View>
+          <View style={{flexDirection:'row', alignItems:'center'}}>
+            { item.rewards?.badge && BADGE_ICONS[item.rewards.badge] ? (
+              <FontAwesome5 name={normalizeIcon(BADGE_ICONS[item.rewards.badge])} size={16} color={colors.viridian} solid />
+            ) : (
+              <FontAwesome name='trophy' size={16} color={colors.viridian} />
+            ) }
+          </View>
+        </View>
+
+        {item.location ? <Text style={styles.metaText}>Location: {item.location}{item.placeCoords ? ` (${item.placeCoords.lat.toFixed(3)}, ${item.placeCoords.lng.toFixed(3)})` : ''}</Text> : null}
+
+        <View style={{flexDirection:'row', alignItems:'center', marginTop:10}}>
+          {item.user?.icon ? <Image source={{uri:item.user.icon}} style={styles.avatarSmall} /> : null}
+          <Text style={styles.metaText}>{item.user?.name}</Text>
+        </View>
+      </View>
     );
   };
 
@@ -319,9 +439,12 @@ export default function Guilds() {
         <TouchableOpacity style={styles.guildCard} onPress={()=>openGuild(item)}>
           {item.icon ? <Image source={{uri:item.icon}} style={{width:64,height:64,borderRadius:12,marginRight:12}} /> : <View style={{width:64,height:64,borderRadius:12,backgroundColor:colors.cambridgeBlue,marginRight:12,alignItems:'center',justifyContent:'center'}}><Text style={{color:'#fff',fontWeight:'700'}}>G</Text></View>}
           <View style={{flex:1}}>
-            <Text style={{fontWeight:'800', color: colors.textDark}}>{item.name}</Text>
+            <View style={{flexDirection:'row', alignItems:'center'}}>
+              <FontAwesome5 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={18} color={colors.textDark} solid style={{marginRight:8}} />
+              <Text style={{fontWeight:'800', color: colors.textDark}}>{item.name}</Text>
+            </View>
             <Text style={{color: colors.textMuted}} numberOfLines={2}>{item.description}</Text>
-            <Text style={{marginTop:6, color: colors.textMuted}}>{plural((item.members||[]).length || item.membersCount || 0, 'member')} • Class: {item.class} • {item.location || ''}</Text>
+            <Text style={{marginTop:6, color: colors.textMuted}}>{plural((item.members||[]).length || item.membersCount || 0, 'member')}{item.location ? ` • ${item.location}` : ''}</Text>
           </View>
           <TouchableOpacity style={[styles.buttonSmall,{minWidth:80, backgroundColor: colors.viridian}]} onPress={()=>handleJoinGuild(item)}>
             <Text style={styles.buttonText}>Join</Text>
@@ -358,10 +481,11 @@ export default function Guilds() {
           )}
 
           <Text style={{fontWeight:'bold', marginTop:6}}>Class</Text>
-          <View style={{flexDirection:'row', marginVertical:8}}>
-            {CLASSES.map(c=>(
-              <TouchableOpacity key={c} style={{padding:8, marginRight:8, borderWidth: newGuild.class===c?2:1, borderColor: newGuild.class===c?'#6c5ce7':'#ccc', borderRadius:8}} onPress={()=>setNewGuild(prev=>({...prev, class:c}))}>
-                <Text>{c}</Text>
+          <View style={{flexDirection:'row', flexWrap:'wrap', marginVertical:8, justifyContent:'space-between'}}>
+            {CLASSES.map(c=> (
+              <TouchableOpacity key={c.name} style={{width:'30%', padding:8, marginBottom:8, borderWidth: newGuild.class===c.name?2:1, borderColor: newGuild.class===c.name?colors.viridian:'#ccc', borderRadius:8, flexDirection:'row', alignItems:'center'}} onPress={()=>setNewGuild(prev=>({...prev, class:c.name}))}>
+                <FontAwesome5 name={normalizeIcon(c.icon)} size={18} color={newGuild.class===c.name ? colors.viridian : colors.text} solid style={{marginRight:8}} />
+                <Text style={{color: colors.textDark}}>{c.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -377,30 +501,29 @@ export default function Guilds() {
       </Modal>
 
       {/* Class Filter Modal */}
-      <Modal visible={classFilterModal} animationType='slide' transparent={true}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalPaper}>
-            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8, color: colors.textDark}}>Filter by Class</Text>
-            {CLASSES.map(c => (
-              <TouchableOpacity key={c.name} style={{flexDirection:'row',alignItems:'center',padding:8}} onPress={()=>{
-                setSelectedClasses(prev => prev.includes(c.name) ? prev.filter(x=>x!==c.name) : [...prev, c.name]);
-              }}>
-                <View style={{width:22,height:22,borderRadius:4, borderWidth:1, borderColor: colors.textMuted, marginRight:10, backgroundColor: selectedClasses.includes(c.name) ? colors.cambridgeBlue : colors.mintCream}} />
-                <Text style={{color: colors.textDark}}>{c.name}</Text>
-              </TouchableOpacity>
-            ))}
-
-            <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
-              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:colors.mintGreen}]} onPress={()=>{ setSelectedClasses([]); setClassFilterModal(false); }}>
-                <Text style={styles.buttonText}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:colors.viridian}]} onPress={()=>setClassFilterModal(false)}>
-                <Text style={styles.buttonText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <Modal visible={classFilterModal} animationType="slide" transparent={true}>
+                <View style={styles.modalBackdrop}>
+                  <View style={[styles.sheet, { backgroundColor: colors.azureWeb }]}>
+                    <Text style={styles.sheetTitle}>Filter by Class</Text>
+                    {CLASSES.map(c => (
+                      <TouchableOpacity key={c.name} style={styles.sheetRow} onPress={()=>{ setSelectedClasses(prev => prev.includes(c.name) ? prev.filter(x=>x!==c.name) : [...prev, c.name]); }}>
+                        <View style={[styles.checkbox, selectedClasses.includes(c.name) && {backgroundColor:colors.viridian, borderColor: colors.viridian}]} />
+                        <FontAwesome5 name={normalizeIcon(c.icon)} size={16} color={colors.viridian} solid style={{marginRight:10}} />
+                        <Text style={styles.sheetText}>{c.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+      
+                    <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
+                      <TouchableOpacity style={[styles.buttonTertiary,{flex:1, marginRight:6, backgroundColor: colors.cambridgeBlue}]} onPress={()=>{ setSelectedClasses([]); setClassFilterModal(false); }}>
+                        <Text style={styles.buttonText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.buttonPrimary,{flex:1, marginLeft:6}]} onPress={()=>setClassFilterModal(false)}>
+                        <Text style={styles.buttonText}>Apply</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
 
       {/* Guild Detail Modal */}
       <Modal visible={modalVisible} animationType='slide'>
@@ -410,9 +533,12 @@ export default function Guilds() {
               <View style={{flexDirection:'row', alignItems:'center', marginBottom:10}}>
                 {selectedGuild.icon ? <Image source={{uri:selectedGuild.icon}} style={{width:80,height:80,borderRadius:12,marginRight:12}} /> : null}
                 <View style={{flex:1}}>
-                  <Text style={{fontSize:20,fontWeight:'800', color: colors.textDark}}>{selectedGuild.name}</Text>
+                  <View style={{flexDirection:'row', alignItems:'center'}}>
+                    <FontAwesome5 name={normalizeIcon((CLASSES.find(c=>c.name===selectedGuild.class) || {icon:'map'}).icon)} size={20} color={colors.textDark} solid style={{marginRight:8}} />
+                    <Text style={{fontSize:20,fontWeight:'800', color: colors.textDark}}>{selectedGuild.name}</Text>
+                  </View>
                   <Text style={{color: colors.textMuted}}>{selectedGuild.description}</Text>
-                  <Text style={{marginTop:6, color: colors.textMuted}}>{plural((selectedGuild.members||[]).length || selectedGuild.membersCount || 0, 'member')} • Class: {selectedGuild.class} • {selectedGuild.location || ''}</Text>
+                  <Text style={{marginTop:6, color: colors.textMuted}}>{plural((selectedGuild.members||[]).length || selectedGuild.membersCount || 0, 'member')}{selectedGuild.location ? ` • ${selectedGuild.location}` : ''}</Text>
                 </View>
                 {isUserMemberOf(selectedGuild) ? (
                   <TouchableOpacity style={[styles.buttonSmall,{minWidth:90, backgroundColor:colors.viridian}]} onPress={()=>handleLeaveGuild(selectedGuild)}><Text style={styles.buttonText}>Leave</Text></TouchableOpacity>
@@ -492,11 +618,11 @@ export default function Guilds() {
 
               {/* Class Picker */}
               <Text style={{marginTop:10, fontWeight:"bold"}}>Select Class:</Text>
-              <View style={{flexDirection:"row", marginVertical:5}}>
+              <View style={{flexDirection:"row", flexWrap:'wrap', marginVertical:5, justifyContent:'space-between'}}>
                 {CLASSES.map((c) => (
-                  <TouchableOpacity key={c.name} style={guildQuest.class === c.name ? styles.classSelected : styles.classOption} onPress={() => { setGuildQuest(prev=>({...prev,class:c.name})); setFilteredBadges(BADGES.filter(b => b.class === c.name)); setGuildQuest(prev => ({...prev, badge:""})); }}>
-                    <FontAwesome name={c.icon} size={22} color={colors.text} />
-                    <Text style={{color:colors.text}}>{c.name}</Text>
+                  <TouchableOpacity key={c.name} style={[guildQuest.class === c.name ? styles.classSelected : styles.classOption, {width:'30%'}]} onPress={() => { setGuildQuest(prev=>({...prev,class:c.name})); setFilteredBadges(BADGES.filter(b => b.class === c.name)); setGuildQuest(prev => ({...prev, badge:""})); }}>
+                    <FontAwesome5 name={normalizeIcon(c.icon)} size={20} color={guildQuest.class===c.name ? colors.viridian : colors.text} solid style={{marginBottom:6}} />
+                    <Text style={{color:colors.text, textAlign:'center'}}>{c.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -514,7 +640,8 @@ export default function Guilds() {
                   <Text style={{fontWeight:"bold", marginTop:10}}>Select Badge Reward:</Text>
                   <View style={{flexDirection:"row", flexWrap:"wrap"}}>
                     {filteredBadges.map(b => (
-                      <TouchableOpacity key={b.name} style={guildQuest.badge === b.name ? styles.badgeSelected : styles.badgeOption} onPress={()=>setGuildQuest(prev=>({...prev,badge:b.name}))}>
+                      <TouchableOpacity key={b.name} style={[guildQuest.badge === b.name ? styles.badgeSelected : styles.badgeOption, {flexDirection:'row', alignItems:'center'}]} onPress={()=>setGuildQuest(prev=>({...prev,badge:b.name}))}>
+                        <FontAwesome5 name={normalizeIcon(BADGE_ICONS[b.name] || b.icon || 'trophy')} size={18} color={guildQuest.badge === b.name ? colors.viridian : colors.text} solid style={{marginRight:8}} />
                         <Text style={{color:colors.text}}>{b.name}</Text>
                       </TouchableOpacity>
                     ))}
