@@ -1,0 +1,57 @@
+import { StyleSheet } from 'react-native';
+
+export const colors = {
+  viridian: '#6b9080ff',
+  cambridgeBlue: '#a4c3b2ff',
+  mintGreen: '#cce3deff',
+  azureWeb: '#eaf4f4ff',
+  mintCream: '#f6fff8ff',
+  textDark: '#163626',
+  textMuted: '#556b63'
+};
+
+export default StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    paddingTop: 24,
+    paddingHorizontal: 16,
+    backgroundColor: colors.azureWeb,
+  },
+  container: { flex: 1 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' },
+  filterRow: { flexDirection: 'row', marginBottom: 10 },
+  createButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.viridian, marginBottom: 10 },
+  button: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.cambridgeBlue, marginVertical: 6 },
+  buttonText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
+  buttonSmall: { padding: 8, borderRadius: 10, backgroundColor: colors.cambridgeBlue, minWidth: 80, alignItems: 'center', justifyContent: 'center' },
+  input: { backgroundColor: colors.mintCream, padding: 10, borderRadius: 12, marginVertical: 6, color: colors.textDark },
+  guildCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.mintGreen,
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  card: { backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 8 },
+  title: { fontWeight: '700', fontSize: 16, color: colors.textDark },
+  modalScroll: { padding: 16, backgroundColor: colors.azureWeb, flex: 1 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center' },
+  modalPaper: { margin: 20, backgroundColor: colors.mintCream, borderRadius: 12, padding: 16 },
+  postCard: { backgroundColor: '#fff', padding: 12, borderRadius: 10, marginVertical: 8 },
+  postImagePreview: { width: '100%', height: 160, borderRadius: 8, marginTop: 8 },
+  center: { flex:1, justifyContent: 'center', alignItems: 'center' },
+  pin: { backgroundColor: colors.viridian, padding: 8, borderRadius: 18, borderWidth: 2, borderColor: '#fff', elevation: 4 },
+  pinTop: { backgroundColor: colors.viridian, padding: 8, borderRadius: 18, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  pinTriangle: { width: 0, height: 0, borderLeftWidth: 8, borderRightWidth: 8, borderTopWidth: 12, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: colors.viridian, alignSelf: 'center', marginTop: -2 },
+  composerBox: { backgroundColor: '#fff', padding: 10, borderRadius: 12, marginVertical: 10 },
+  postsSection: { marginTop: 8 },
+  separator: { height: 1, backgroundColor: '#dfeee8', marginVertical: 12, borderRadius: 1 },
+  avatarPicker: { backgroundColor: colors.mintCream, padding: 8, borderRadius: 64, marginBottom: 12, alignSelf: 'center', width: 110, height: 110, justifyContent: 'center', alignItems: 'center' },
+  avatar: { width: 110, height: 110, borderRadius: 64 },
+});

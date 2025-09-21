@@ -6,6 +6,7 @@ import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebas
 import { db, auth } from './firebase';
 import * as ImagePicker from 'expo-image-picker';
 import { FontAwesome } from '@expo/vector-icons';
+import styles, { colors } from './styles';
 
 const CLASS_ICONS = {
   Explorer: 'map',
@@ -78,7 +79,31 @@ export default function MapScreen() {
     }
   };
 
-  const formatDate = (iso) => iso ? new Date(iso).toLocaleDateString() : "";
+  const formatDate = (input) => {
+    if (!input) return "";
+    try { if (input.toDate && typeof input.toDate === 'function') return new Date(input.toDate()).toLocaleDateString(); } catch(e){}
+    if (input instanceof Date) return input.toLocaleDateString();
+    try { const d = new Date(input); if (!isNaN(d.getTime())) return d.toLocaleDateString(); } catch(e){}
+    return "";
+  };
+
+  const formatDateTime = (input) => {
+    if (!input) return "";
+    try { if (input.toDate && typeof input.toDate === 'function') return new Date(input.toDate()).toLocaleString(); } catch(e){}
+    if (input instanceof Date) return input.toLocaleString();
+    try { const d = new Date(input); if (!isNaN(d.getTime())) return d.toLocaleString(); } catch(e){}
+    return "";
+  };
+
+  const formatDateShort = (input) => {
+    if (!input) return "";
+    try { if (input.toDate && typeof input.toDate === 'function') return new Date(input.toDate()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch(e){}
+    if (input instanceof Date) return input.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    try { const d = new Date(input); if (!isNaN(d.getTime())) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch(e){}
+    return "";
+  };
+
+  
 
   const handleAddPost = async (quest) => {
     try {
@@ -169,14 +194,14 @@ export default function MapScreen() {
   if (loading || !region) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6c5ce7" />
-        <Text style={{marginTop:8}}>Loading map...</Text>
+        <ActivityIndicator size="large" color={colors.viridian} />
+        <Text style={{marginTop:8, color: colors.textDark}}>Loading map...</Text>
       </View>
     );
   }
 
   return (
-    <View style={{flex:1}}>
+    <View style={styles.safeArea}>
       <MapView style={{flex:1}} initialRegion={region} showsUserLocation>
         {quests.map(q => (
           <Marker
@@ -192,23 +217,47 @@ export default function MapScreen() {
       </MapView>
 
       <Modal visible={modalVisible} animationType="slide">
-        <ScrollView style={{padding:12}}>
+        <ScrollView style={{padding:12, backgroundColor: colors.azureWeb}}>
           {selectedQuest && (
             <>
               {selectedQuest.image ? <Image source={{uri:selectedQuest.image}} style={{width:'100%',height:220,borderRadius:8,marginBottom:12}} /> : null}
-              <Text style={{fontSize:24,fontWeight:'bold'}}>{selectedQuest.title}</Text>
+              <View style={{flexDirection:'row', alignItems:'center', marginTop:0}}>
+                <View style={{width:40,height:40,borderRadius:20,backgroundColor: colors.viridian,alignItems:'center',justifyContent:'center',marginRight:12}}>
+                  <FontAwesome name={CLASS_ICONS[selectedQuest.class] || 'map-o'} size={18} color="#fff" />
+                </View>
+                <Text style={{fontSize:22,fontWeight:'800', color: colors.textDark, flexShrink:1}}>{selectedQuest.title}</Text>
+              </View>
+              {(selectedQuest.startDate || selectedQuest.endDate) ? (
+                <Text style={{marginTop:6, color: colors.textMuted}}>
+                  {selectedQuest.startDate && selectedQuest.endDate
+                    ? `${formatDateShort(selectedQuest.startDate)} — ${formatDateShort(selectedQuest.endDate)}`
+                    : (selectedQuest.startDate ? `Starts ${formatDateShort(selectedQuest.startDate)}` : `Ends ${formatDateShort(selectedQuest.endDate)}`)}
+                </Text>
+              ) : null}
+              {selectedQuest.location ? <Text style={{marginTop:6, color: colors.viridian}}>{selectedQuest.location}</Text> : null}
               <Text style={{marginTop:6}}>{selectedQuest.description}</Text>
-              <Text style={{marginTop:6}}>Class: {selectedQuest.class}</Text>
-              <Text>Difficulty: {selectedQuest.difficulty}</Text>
-              {selectedQuest.location ? <Text style={{marginTop:6}}>Location: {selectedQuest.location}</Text> : null}
-              {selectedQuest.placeCoords ? <Text>Coords: {selectedQuest.placeCoords.lat}, {selectedQuest.placeCoords.lng}</Text> : null}
+
+              {/* Available rewards row */}
+              <View style={{flexDirection:'row', alignItems:'center', marginTop:12}}>
+                <Text style={{fontWeight:'700', color: colors.textDark, marginRight:12}}>Available rewards</Text>
+                <View style={{flexDirection:'row', alignItems:'center'}}>
+                  <View style={{flexDirection:'row', alignItems:'center', marginRight:16}}>
+                    <FontAwesome name='bolt' size={16} color={colors.viridian} />
+                    <Text style={{marginLeft:8, color: colors.textMuted}}>{selectedQuest.rewards?.xp || 0} XP</Text>
+                  </View>
+                  <View style={{flexDirection:'row', alignItems:'center'}}>
+                    <FontAwesome name='trophy' size={16} color={colors.viridian} />
+                    <Text style={{marginLeft:8, color: colors.textMuted}}>{selectedQuest.rewards?.badge || 'None'}</Text>
+                  </View>
+                </View>
+              </View>
               <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
                 {selectedQuest.user?.icon ? <Image source={{uri:selectedQuest.user.icon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
                 <Text>{selectedQuest.user?.name}</Text>
               </View>
-              <Text style={{marginTop:8}}>XP: {selectedQuest.rewards?.xp || 0} | Badge: {selectedQuest.rewards?.badge || 'None'}</Text>
 
-              <Text style={{marginTop:20,fontSize:18,fontWeight:'bold'}}>Posts</Text>
+              <View style={styles.separator} />
+              <Text style={{marginTop:0,fontSize:18,fontWeight:'bold'}}>Posts</Text>
               <View style={styles.postsSection}>
                 {selectedQuest.posts?.length ? selectedQuest.posts.map((p,i)=>(
                   <View key={i} style={styles.postCard}>
@@ -218,21 +267,36 @@ export default function MapScreen() {
                     </View>
                     <Text style={{color:'#333', marginBottom:6}}>{p.description}</Text>
                     {p.image && <Image source={{uri:p.image}} style={styles.postImagePreview} />}
+                    {p.timeRange || p.createdAt || p.date ? (
+                      <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
+                        <FontAwesome name='clock-o' size={14} color={colors.textMuted} />
+                        <Text style={{marginLeft:8, color: colors.textMuted}}>
+                          {p.timeRange
+                            ? (typeof p.timeRange === 'string'
+                                ? formatDateShort(p.timeRange)
+                                : (p.timeRange.start && p.timeRange.end
+                                    ? `${formatDateShort(p.timeRange.start)} — ${formatDateShort(p.timeRange.end)}`
+                                    : (p.timeRange.start ? formatDateShort(p.timeRange.start) : (p.timeRange.end ? formatDateShort(p.timeRange.end) : ''))))
+                            : (p.createdAt ? formatDateShort(p.createdAt) : (p.date ? formatDateShort(p.date) : ''))
+                          }
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 )) : <Text style={{color:'#666'}}>No posts yet. Be the first to share!</Text>}
               </View>
 
               {/* Composer Box */}
               <View style={styles.composerBox}>
-                <TextInput placeholder="Write a post... (max 50 words)" style={[styles.input,{flex:1, marginBottom:0, backgroundColor:'#fff'}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
+                <TextInput placeholder="Write a post... (max 50 words)" style={[styles.input,{flex:1, marginBottom:0, backgroundColor: colors.mintCream}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
                 <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:8}}>
                   <TouchableOpacity style={styles.buttonSmall} onPress={()=>pickImage(setNewPostImage)}>
                     <Text style={styles.buttonText}>Add Image</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#00b894'}]} onPress={()=>handleAddPost(selectedQuest)}>
+                  <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#A4C3B2'}]} onPress={()=>handleAddPost(selectedQuest)}>
                     <Text style={styles.buttonText}>Post</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#d63031'}]} onPress={()=>{ setNewPostDesc(''); setNewPostImage(null); }}>
+                  <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#CCE3DE'}]} onPress={()=>{ setNewPostDesc(''); setNewPostImage(null); }}>
                     <Text style={styles.buttonText}>Clear</Text>
                   </TouchableOpacity>
                 </View>
@@ -240,11 +304,11 @@ export default function MapScreen() {
               </View>
 
               <View style={{marginTop:8}}>
-                <TouchableOpacity style={[styles.button,{backgroundColor:'#00b894'}]} onPress={()=>handleCompleteQuest(selectedQuest)}>
+                <TouchableOpacity style={[styles.button,{backgroundColor:'#6B9080'}]} onPress={()=>handleCompleteQuest(selectedQuest)}>
                   <Text style={styles.buttonText}>Complete Quest</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.button,{backgroundColor:'#d63031'}]} onPress={()=>setModalVisible(false)}>
+                <TouchableOpacity style={[styles.button,{backgroundColor:'#CCE3DE'}]} onPress={()=>setModalVisible(false)}>
                   <Text style={styles.buttonText}>Close</Text>
                 </TouchableOpacity>
               </View>
@@ -255,17 +319,3 @@ export default function MapScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  center: {flex:1,justifyContent:'center',alignItems:'center'},
-  pin: { backgroundColor:'#6c5ce7', padding:8, borderRadius:18, borderWidth:2, borderColor:'#fff', elevation:4 },
-  closeButton: { padding:12, borderRadius:8, marginTop:12 }
-  ,
-  button: { padding:10, borderRadius:8, backgroundColor:"#6c5ce7", marginVertical:5 },
-  buttonText: { color:"#fff", textAlign:"center", fontWeight:"bold" },
-  postCard: { backgroundColor:'#fff', padding:10, borderRadius:8, marginVertical:6 },
-  composerBox: { backgroundColor:'#f0f0f0', padding:10, borderRadius:8, marginVertical:10 },
-  postsSection: { marginTop:8 },
-  buttonSmall: { padding:8, borderRadius:8, backgroundColor:'#6c5ce7', minWidth:90, marginRight:6 },
-  postImagePreview: { width:'100%', height:150, borderRadius:8, marginTop:8 }
-});

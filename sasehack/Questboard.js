@@ -1,5 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Modal, ScrollView, TextInput, Alert, Platform } from "react-native";
+import {
+    SafeAreaView,
+    StatusBar,
+    View,
+    Text,
+    FlatList,
+    TouchableOpacity,
+    StyleSheet,
+    Image,
+    Modal,
+    ScrollView,
+    TextInput,
+    Alert,
+    Platform
+} from "react-native";
 import * as Location from 'expo-location';
 import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 import { db, auth } from "./firebase";
@@ -7,9 +21,25 @@ import googleConfig from './googleConfig';
 import * as ImagePicker from "expo-image-picker";
 import { FontAwesome } from "@expo/vector-icons";
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Questboard() {
+  // color palette requested
+  const COLORS = {
+    viridian: '#6b9080ff',
+    cambridgeBlue: '#a4c3b2ff',
+    mintGreen: '#cce3deff',
+    azureWeb: '#eaf4f4ff',
+    mintCream: '#f6fff8ff',
+    textDark: '#163626',
+    textMuted: '#556b63'
+  };
+
+  const CLASS_ICONS = {
+  Explorer: 'map',
+  Baker: 'cutlery',
+  Artist: 'paint-brush'
+  };
+
   const [quests, setQuests] = useState([]);
   const [selectedQuest, setSelectedQuest] = useState(null);
   const [selectedQuestPosts, setSelectedQuestPosts] = useState([]);
@@ -36,9 +66,7 @@ export default function Questboard() {
   const [newQuest, setNewQuest] = useState({
     title: "",
     description: "",
-    // location will store the human-readable place name
     location: "",
-    // placeCoords stores { lat, lng }
     placeCoords: null,
     class: "",
     difficulty: 0,
@@ -46,6 +74,7 @@ export default function Questboard() {
     startDate: null,
     endDate: null,
   });
+
   // Filter states
   const [classFilterModal, setClassFilterModal] = useState(false);
   const [locationFilterModal, setLocationFilterModal] = useState(false);
@@ -335,6 +364,17 @@ export default function Questboard() {
   };
 
   const formatDate = (iso) => iso ? new Date(iso).toLocaleDateString() : "";
+  const formatDateShort = (input) => {
+    if (!input) return "";
+    let d;
+    try {
+      if (typeof input === 'object' && input?.toDate instanceof Function) d = input.toDate();
+      else if (typeof input === 'string' || typeof input === 'number') d = new Date(input);
+      else if (input instanceof Date) d = input;
+      else return "";
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (e) { return ""; }
+  };
 
   const handleStartDateChange = (event, selectedDate) => {
     setShowStartPicker(Platform.OS === 'ios');
@@ -361,13 +401,13 @@ export default function Questboard() {
   };
 
   const renderQuestCard = ({ item }) => {
-    const start = item.startDate ? formatDate(item.startDate) : null;
-    const end = item.endDate ? formatDate(item.endDate) : null;
+    const start = item.startDate ? formatDateShort(item.startDate) : null;
+    const end = item.endDate ? formatDateShort(item.endDate) : null;
     const dateRangeText = start && end ? `${start} — ${end}` : start ? `From ${start}` : end ? `Until ${end}` : null;
     const ended = item.endDate ? (new Date(item.endDate) < new Date()) : false;
 
     return (
-      <TouchableOpacity style={styles.card} onPress={async () => {
+      <TouchableOpacity style={[styles.card]} onPress={async () => {
         // Fetch latest posts for this quest from Firestore
         try {
           const questRef = doc(db, "Quests", item.id);
@@ -385,416 +425,426 @@ export default function Questboard() {
         }
         setModalVisible(true);
       }}>
-        {item.image ? <Image source={{uri:item.image}} style={{width:"100%",height:140,borderRadius:8,marginBottom:8}} /> : null}
+        {item.image ? <Image source={{uri:item.image}} style={styles.cardImage} /> : null}
 
-        <View style={{flexDirection:'row', alignItems:'center', marginBottom:4}}>
+        <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
           {ended ? <Text style={styles.endedTag}>ENDED</Text> : null}
+          <View style={{width:36,height:36,borderRadius:18,backgroundColor:COLORS.viridian,alignItems:'center',justifyContent:'center',marginRight:8}}>
+            <FontAwesome name={(CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon} size={16} color={COLORS.mintCream} />
+          </View>
           <Text style={styles.title}>{item.title}</Text>
         </View>
 
         {dateRangeText ? <Text style={styles.dateRange}>{dateRangeText}</Text> : null}
 
-  <Text style={{color:"#555"}}>{item.description.slice(0,50)}...</Text>
-  <Text>Class: {item.class} | XP: {item.rewards.xp}</Text>
-  {item.location ? <Text>Location: {item.location}{item.placeCoords ? ` (${item.placeCoords.lat.toFixed(4)}, ${item.placeCoords.lng.toFixed(4)})` : ''}</Text> : null}
-        <View style={{flexDirection:'row', alignItems:'center'}}>
-          {item.user?.icon ? <Image source={{uri:item.user.icon}} style={{width:28,height:28,borderRadius:14,marginRight:8}} /> : null}
-          <Text>{item.user.name} {item.rewards.badge ? "| Badge: " + item.rewards.badge : ""}</Text>
+        <Text style={styles.mutedText}>{item.description.slice(0,80)}{item.description.length>80 ? "..." : ""}</Text>
+
+        <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:8, alignItems:'center'}}>
+          <View style={{flexDirection:'row', alignItems:'center'}}>
+            <FontAwesome name='bolt' size={14} color={COLORS.viridian} />
+            <Text style={[styles.metaText,{marginLeft:8}]}>{item.rewards?.xp ?? 0} XP</Text>
+          </View>
+          <View style={{flexDirection:'row', alignItems:'center'}}>
+            <FontAwesome name='trophy' size={14} color={COLORS.viridian} />
+            <Text style={[styles.metaText,{marginLeft:8}]}>{item.rewards?.badge || 'None'}</Text>
+          </View>
+        </View>
+
+        {item.location ? <Text style={styles.metaText}>Location: {item.location}{item.placeCoords ? ` (${item.placeCoords.lat.toFixed(3)}, ${item.placeCoords.lng.toFixed(3)})` : ''}</Text> : null}
+
+        <View style={{flexDirection:'row', alignItems:'center', marginTop:10}}>
+          {item.user?.icon ? <Image source={{uri:item.user.icon}} style={styles.avatarSmall} /> : null}
+          <Text style={styles.metaText}>{item.user?.name || '—'}</Text>
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={{flex:1, padding:10, backgroundColor:"#f7f1e3"}}>
-      <TouchableOpacity style={styles.createButton} onPress={()=>setCreatingQuest(true)}>
-        <Text style={styles.buttonText}>Create New Quest</Text>
-      </TouchableOpacity>
-
-      {/* Top filter bar */}
-      <View style={{flexDirection:'row', justifyContent:'space-around', marginBottom:8}}>
-        <TouchableOpacity style={[styles.buttonSmall,{backgroundColor: selectedClasses.length>0 ? '#0984e3' : '#6c5ce7'}]} onPress={()=>setClassFilterModal(true)}>
-          <Text style={styles.buttonText}>Class</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.buttonSmall,{backgroundColor: locationFilter && locationFilter.coords ? '#0984e3' : '#6c5ce7'}]} onPress={()=>setLocationFilterModal(true)}>
-          <Text style={styles.buttonText}>Location</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.buttonSmall,{backgroundColor: timeFilterDate ? '#0984e3' : '#6c5ce7'}]} onPress={()=>setTimeFilterModal(true)}>
-          <Text style={styles.buttonText}>Time</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={computeFiltered()}
-        keyExtractor={(item)=>item.id}
-        renderItem={renderQuestCard}
-      />
-
-      {/* Quest Modal */}
-      <Modal visible={modalVisible} animationType="slide" onShow={async () => {
-        if (selectedQuest) {
-          try {
-            const questRef = doc(db, "Quests", selectedQuest.id);
-            const questSnap = await getDoc(questRef);
-            if (questSnap.exists()) {
-              setSelectedQuest({ id: questSnap.id, ...questSnap.data() });
-              setSelectedQuestPosts(questSnap.data().posts || []);
-            }
-          } catch (e) { /* ignore */ }
-        }
-      }}>
-        <ScrollView style={{padding:10}}>
-          {selectedQuest && <>
-            {selectedQuest.image ? <Image source={{uri:selectedQuest.image}} style={{width:'100%',height:220,borderRadius:8,marginBottom:12}} /> : null}
-            <Text style={{fontSize:24,fontWeight:"bold"}}>{selectedQuest.title}</Text>
-            <Text>{selectedQuest.description}</Text>
-            <Text>Class: {selectedQuest.class}</Text>
-            <Text>Difficulty: {selectedQuest.difficulty}</Text>
-            <Text>Location: {selectedQuest.location}</Text>
-            {selectedQuest.placeCoords ? <Text>Coords: {selectedQuest.placeCoords.lat}, {selectedQuest.placeCoords.lng}</Text> : null}
-            <View style={{flexDirection:'row', alignItems:'center'}}>
-              {selectedQuest.user?.icon ? <Image source={{uri:selectedQuest.user.icon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
-              <Text>{selectedQuest.user.name}</Text>
-            </View>
-            <Text>XP: {selectedQuest.rewards.xp} | Badge: {selectedQuest.rewards.badge || "None"}</Text>
-
-            <Text style={{marginTop:20,fontSize:18,fontWeight:"bold"}}>Posts</Text>
-            <View style={styles.postsSection}>
-              {selectedQuestPosts.length ? selectedQuestPosts.map((p,i)=>(
-                <View key={i} style={styles.postCard}>
-                  <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
-                    {p.userIcon ? <Image source={{uri:p.userIcon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
-                    <Text style={{fontWeight:'600'}}>{p.username}</Text>
-                  </View>
-                  <Text style={{color:'#333', marginBottom:6}}>{p.description}</Text>
-                  {p.image && <Image source={{uri:p.image}} style={styles.postImagePreview} />}
-                </View>
-              )) : <Text style={{color:'#666'}}>No posts yet. Be the first to share!</Text>}
-            </View>
-
-            {/* Composer Box */}
-            <View style={styles.composerBox}>
-              <TextInput placeholder="Write a post... (max 50 words)" style={[styles.input,{flex:1, marginBottom:0, backgroundColor:'#fff'}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
-              <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:8}}>
-                <TouchableOpacity style={styles.buttonSmall} onPress={()=>pickImage(setNewPostImage)}>
-                  <Text style={styles.buttonText}>Add Image</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#00b894'}]} onPress={async ()=>{
-                  await handleAddPost(selectedQuest);
-                  // Refetch posts after adding
-                  try {
-                    const questRef = doc(db, "Quests", selectedQuest.id);
-                    const questSnap = await getDoc(questRef);
-                    if (questSnap.exists()) setSelectedQuestPosts(questSnap.data().posts || []);
-                  } catch(e){}
-                }}>
-                  <Text style={styles.buttonText}>Post</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#d63031'}]} onPress={()=>{ setNewPostDesc(''); setNewPostImage(null); }}>
-                  <Text style={styles.buttonText}>Clear</Text>
-                </TouchableOpacity>
-              </View>
-              {newPostImage ? <Image source={{uri:newPostImage}} style={styles.postImagePreview} /> : null}
-            </View>
-
-            <View style={{marginTop:8}}>
-              <TouchableOpacity style={[styles.button,{backgroundColor:"#00b894"}]} onPress={async ()=>{
-                await handleCompleteQuest(selectedQuest);
-                // Refetch posts after completing quest (in case posts are affected)
-                try {
-                  const questRef = doc(db, "Quests", selectedQuest.id);
-                  const questSnap = await getDoc(questRef);
-                  if (questSnap.exists()) setSelectedQuestPosts(questSnap.data().posts || []);
-                } catch(e){}
-              }}>
-                <Text style={styles.buttonText}>Complete Quest</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.button,{backgroundColor:"#d63031"}]} onPress={()=>setModalVisible(false)}>
-                <Text style={styles.buttonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </>}
-        </ScrollView>
-      </Modal>
-
-      {/* Class Filter Modal */}
-      <Modal visible={classFilterModal} animationType="slide" transparent={true}>
-        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center'}}>
-          <View style={{margin:20, backgroundColor:'#fff', borderRadius:8, padding:12}}>
-            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8}}>Filter by Class</Text>
-            {CLASSES.map(c => (
-              <TouchableOpacity key={c.name} style={{flexDirection:'row',alignItems:'center',padding:8}} onPress={()=>{
-                setSelectedClasses(prev => prev.includes(c.name) ? prev.filter(x=>x!==c.name) : [...prev, c.name]);
-              }}>
-                <View style={{width:22,height:22,borderRadius:4, borderWidth:1, borderColor:'#666', marginRight:10, backgroundColor: selectedClasses.includes(c.name) ? '#6c5ce7' : '#fff'}} />
-                <Text>{c.name}</Text>
-              </TouchableOpacity>
-            ))}
-
-            <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
-              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:'#b2bec3'}]} onPress={()=>{ setSelectedClasses([]); setClassFilterModal(false); }}>
-                <Text style={styles.buttonText}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:'#6c5ce7'}]} onPress={()=>setClassFilterModal(false)}>
-                <Text style={styles.buttonText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: COLORS.azureWeb }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.mintCream} />
+      <ScrollView style={{flex:1}} contentContainerStyle={{paddingBottom:20}}>
+        <View style={styles.headerRow}>
+          <Text style={styles.screenTitle}>Questboard</Text>
+          <TouchableOpacity style={styles.createButton} onPress={()=>setCreatingQuest(true)}>
+            <Text style={styles.createButtonText}>+ New</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
 
-      {/* Location Filter Modal */}
-      <Modal visible={locationFilterModal} animationType="slide" transparent={true}>
-        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center'}}>
-          <View style={{margin:20, backgroundColor:'#fff', borderRadius:8, padding:12}}>
-            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8}}>Filter by Location</Text>
+        {/* Top filter bar */}
+        <View style={styles.filterBar}>
+          <TouchableOpacity style={[styles.filterButton, selectedClasses.length>0 && styles.filterButtonActive]} onPress={()=>setClassFilterModal(true)}>
+            <Text style={[styles.filterText, selectedClasses.length>0 && styles.filterTextActive]}>Class</Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.button,{backgroundColor:'#0984e3'}]} onPress={async ()=>{
-              try {
-                const { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                  Alert.alert('Permission denied', 'Location permission is required to use this filter.');
-                  return;
-                }
-                const pos = await Location.getCurrentPositionAsync({});
-                const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                setLocationFilter(prev=> ({...prev, coords: c}));
-              } catch (err) {
-                console.warn('expo-location error', err);
-                Alert.alert('Location error', err.message || 'Unable to get location');
-              }
-            }}>
-              <Text style={styles.buttonText}>Use My Location</Text>
-            </TouchableOpacity>
+          <TouchableOpacity style={[styles.filterButton, locationFilter && locationFilter.coords && styles.filterButtonActive]} onPress={()=>setLocationFilterModal(true)}>
+            <Text style={[styles.filterText, locationFilter && locationFilter.coords && styles.filterTextActive]}>Location</Text>
+          </TouchableOpacity>
 
-            <Text style={{marginTop:10}}>Radius (km)</Text>
-            <TextInput keyboardType='numeric' value={String(locationFilter.radiusKm)} onChangeText={(t)=>{
-              const v = Number(t) || 0; setLocationFilter(prev=> ({...prev, radiusKm: v}));
-            }} style={styles.input} />
-
-            <Text style={{marginTop:8}}>Current: {locationFilter.coords ? `${locationFilter.coords.lat.toFixed(4)}, ${locationFilter.coords.lng.toFixed(4)}` : 'Not set'}</Text>
-
-            <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
-              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:'#b2bec3'}]} onPress={()=>{ setLocationFilter({coords:null, radiusKm:5}); setLocationFilterModal(false); }}>
-                <Text style={styles.buttonText}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:'#6c5ce7'}]} onPress={()=>setLocationFilterModal(false)}>
-                <Text style={styles.buttonText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <TouchableOpacity style={[styles.filterButton, timeFilterDate && styles.filterButtonActive]} onPress={()=>setTimeFilterModal(true)}>
+            <Text style={[styles.filterText, timeFilterDate && styles.filterTextActive]}>Time</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
 
-      {/* Time Filter Modal */}
-      <Modal visible={timeFilterModal} animationType="slide" transparent={true}>
-        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center'}}>
-          <View style={{margin:20, backgroundColor:'#fff', borderRadius:8, padding:12}}>
-            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8}}>Filter by Date</Text>
-            <TouchableOpacity style={[styles.button,{backgroundColor:'#74b9ff'}]} onPress={()=>setTimeFilterDate(new Date().toISOString())}>
-              <Text style={styles.buttonText}>Set to Today</Text>
-            </TouchableOpacity>
+        <FlatList
+          data={computeFiltered()}
+          keyExtractor={(item)=>item.id}
+          renderItem={renderQuestCard}
+          contentContainerStyle={{paddingHorizontal:10, paddingBottom:40}}
+        />
 
-            <View style={{marginTop:10}}>
-              <Text>Selected: {timeFilterDate ? (new Date(timeFilterDate)).toLocaleDateString() : 'Any date'}</Text>
-            </View>
+        {/* Quest Modal */}
+        <Modal visible={modalVisible} animationType="slide">
+                <ScrollView style={{padding:12, backgroundColor: COLORS.azureWeb}}>
+                  {selectedQuest && (
+                    <>
+                      {selectedQuest.image ? <Image source={{uri:selectedQuest.image}} style={{width:'100%',height:220,borderRadius:8,marginBottom:12}} /> : null}
+                      <View style={{flexDirection:'row', alignItems:'center', marginTop:0}}>
+                        <View style={{width:40,height:40,borderRadius:20,backgroundColor: COLORS.viridian,alignItems:'center',justifyContent:'center',marginRight:12}}>
+                          <FontAwesome name={CLASS_ICONS[selectedQuest.class] || 'map-o'} size={18} color="#fff" />
+                        </View>
+                        <Text style={{fontSize:22,fontWeight:'800', color: COLORS.textDark, flexShrink:1}}>{selectedQuest.title}</Text>
+                      </View>
+                      {(selectedQuest.startDate || selectedQuest.endDate) ? (
+                        <Text style={{marginTop:6, color: COLORS.textMuted}}>
+                          {selectedQuest.startDate && selectedQuest.endDate
+                            ? `${formatDateShort(selectedQuest.startDate)} — ${formatDateShort(selectedQuest.endDate)}`
+                            : (selectedQuest.startDate ? `Starts ${formatDateShort(selectedQuest.startDate)}` : `Ends ${formatDateShort(selectedQuest.endDate)}`)}
+                        </Text>
+                      ) : null}
+                      {selectedQuest.location ? <Text style={{marginTop:6, color: COLORS.viridian}}>{selectedQuest.location}</Text> : null}
+                      <Text style={{marginTop:6}}>{selectedQuest.description}</Text>
+        
+                      {/* Available rewards row */}
+                      <View style={{flexDirection:'row', alignItems:'center', marginTop:12}}>
+                        <Text style={{fontWeight:'700', color: COLORS.textDark, marginRight:12}}>Available rewards</Text>
+                        <View style={{flexDirection:'row', alignItems:'center'}}>
+                          <View style={{flexDirection:'row', alignItems:'center', marginRight:16}}>
+                            <FontAwesome name='bolt' size={16} color={COLORS.viridian} />
+                            <Text style={{marginLeft:8, color: COLORS.textMuted}}>{selectedQuest.rewards?.xp || 0} XP</Text>
+                          </View>
+                          <View style={{flexDirection:'row', alignItems:'center'}}>
+                            <FontAwesome name='trophy' size={16} color={COLORS.viridian} />
+                            <Text style={{marginLeft:8, color: COLORS.textMuted}}>{selectedQuest.rewards?.badge || 'None'}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
+                        {selectedQuest.user?.icon ? <Image source={{uri:selectedQuest.user.icon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
+                        <Text>{selectedQuest.user?.name}</Text>
+                      </View>
+        
+                      <View style={styles.separator} />
+                      <Text style={{marginTop:0,fontSize:18,fontWeight:'bold'}}>Posts</Text>
+                      <View style={styles.postsSection}>
+                        {selectedQuest.posts?.length ? selectedQuest.posts.map((p,i)=>(
+                          <View key={i} style={styles.postCard}>
+                            <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
+                              {p.userIcon ? <Image source={{uri:p.userIcon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
+                              <Text style={{fontWeight:'600'}}>{p.username}</Text>
+                            </View>
+                            <Text style={{color:'#333', marginBottom:6}}>{p.description}</Text>
+                            {p.image && <Image source={{uri:p.image}} style={styles.postImagePreview} />}
+                            {p.timeRange || p.createdAt || p.date ? (
+                              <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
+                                <FontAwesome name='clock-o' size={14} color={COLORS.textMuted} />
+                                <Text style={{marginLeft:8, color: COLORS.textMuted}}>
+                                  {p.timeRange
+                                    ? (typeof p.timeRange === 'string'
+                                        ? formatDateShort(p.timeRange)
+                                        : (p.timeRange.start && p.timeRange.end
+                                            ? `${formatDateShort(p.timeRange.start)} — ${formatDateShort(p.timeRange.end)}`
+                                            : (p.timeRange.start ? formatDateShort(p.timeRange.start) : (p.timeRange.end ? formatDateShort(p.timeRange.end) : ''))))
+                                    : (p.createdAt ? formatDateShort(p.createdAt) : (p.date ? formatDateShort(p.date) : ''))
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        )) : <Text style={{color:'#666'}}>No posts yet. Be the first to share!</Text>}
+                      </View>
+        
+                      {/* Composer Box */}
+                      <View style={styles.composerBox}>
+                        <TextInput placeholder="Write a post... (max 50 words)" style={[styles.input,{flex:1, marginBottom:0, backgroundColor: '#fff'}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
+                        <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:8}}>
+                          <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:COLORS.viridian}]} onPress={()=>pickImage(setNewPostImage)}>
+                            <Text style={[styles.buttonText,{color: '#fff'}]}>Add Image</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:COLORS.viridian}]} onPress={()=>handleAddPost(selectedQuest)}>
+                            <Text style={[styles.buttonText,{color: '#fff'}]}>Post</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:COLORS.mintGreen}]} onPress={()=>{ setNewPostDesc(''); setNewPostImage(null); }}>
+                            <Text style={[styles.buttonText,{color: '#fff'}]}>Clear</Text>
+                          </TouchableOpacity>
+                        </View>
+                        {newPostImage ? <Image source={{uri:newPostImage}} style={styles.postImagePreview} /> : null}
+                      </View>
+        
+                      <View style={{marginTop:8}}>
+                        <TouchableOpacity style={[styles.button,{backgroundColor:'#6B9080'}]} onPress={()=>handleCompleteQuest(selectedQuest)}>
+                          <Text style={styles.buttonText}>Complete Quest</Text>
+                        </TouchableOpacity>
+        
+                        <TouchableOpacity style={[styles.button,{backgroundColor:'#CCE3DE'}]} onPress={()=>setModalVisible(false)}>
+                          <Text style={styles.buttonText}>Close</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </ScrollView>
+              </Modal>
 
-            <View style={{marginTop:8}}>
-              <DateTimePicker value={timeFilterDate ? new Date(timeFilterDate) : new Date()} mode="date" display="default" onChange={(e, d)=>{
-                if (d) setTimeFilterDate(d.toISOString());
-              }} />
-            </View>
-
-            <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
-              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:'#b2bec3'}]} onPress={()=>{ setTimeFilterDate(null); setTimeFilterModal(false); }}>
-                <Text style={styles.buttonText}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:'#6c5ce7'}]} onPress={()=>setTimeFilterModal(false)}>
-                <Text style={styles.buttonText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Create Quest Modal */}
-      <Modal visible={creatingQuest} animationType="slide">
-        <ScrollView style={{padding:10}}>
-          <TextInput
-            placeholder="Title"
-            style={styles.input}
-            value={newQuest.title}
-            onChangeText={(text)=>setNewQuest({...newQuest,title:text})}
-          />
-          <TextInput
-            placeholder="Description"
-            style={[styles.input,{height:100}]}
-            value={newQuest.description}
-            onChangeText={(text)=>setNewQuest({...newQuest,description:text})}
-            multiline
-          />
-          <TextInput
-            placeholder="Location (Optional)"
-            style={styles.input}
-            value={placeQuery || newQuest.location}
-            onChangeText={(text)=>{
-              setPlaceQuery(text);
-              setNewQuest({...newQuest, location: ''});
-              fetchPredictions(text);
-            }}
-          />
-
-          {predictions.length > 0 && (
-            <View style={{backgroundColor:'#fff', borderRadius:8, marginBottom:6}}>
-              {predictions.map(p => (
-                <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{
-                  const details = await fetchPlaceDetails(p.place_id);
-                  if (details) {
-                    setNewQuest(prev=> ({...prev, location: details.name || details.address, placeCoords: details.coords }));
-                    setPlaceQuery(details.name || details.address);
-                    setPredictions([]);
-                  }
-                }}>
-                  <Text>{p.description}</Text>
+        {/* Class Filter Modal */}
+        <Modal visible={classFilterModal} animationType="slide" transparent={true}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.sheet, { backgroundColor: COLORS.azureWeb }]}>
+              <Text style={styles.sheetTitle}>Filter by Class</Text>
+              {CLASSES.map(c => (
+                <TouchableOpacity key={c.name} style={styles.sheetRow} onPress={()=>{ setSelectedClasses(prev => prev.includes(c.name) ? prev.filter(x=>x!==c.name) : [...prev, c.name]); }}>
+                  <View style={[styles.checkbox, selectedClasses.includes(c.name) && {backgroundColor:COLORS.viridian, borderColor: COLORS.viridian}]} />
+                  <Text style={styles.sheetText}>{c.name}</Text>
                 </TouchableOpacity>
               ))}
+
+              <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
+                <TouchableOpacity style={[styles.buttonTertiary,{flex:1, marginRight:6, backgroundColor: COLORS.cambridgeBlue}]} onPress={()=>{ setSelectedClasses([]); setClassFilterModal(false); }}>
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.buttonPrimary,{flex:1, marginLeft:6}]} onPress={()=>setClassFilterModal(false)}>
+                  <Text style={styles.buttonText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-
-          <TouchableOpacity style={styles.button} onPress={()=>pickImage(setNewQuestImage)}>
-            <Text style={styles.buttonText}>Pick Quest Image (Optional)</Text>
-          </TouchableOpacity>
-          {newQuestImage ? <Image source={{uri:newQuestImage}} style={{width:120,height:120,alignSelf:'center',borderRadius:8,marginVertical:6}} /> : null}
-
-          {/* Date Range */}
-          <Text style={{marginTop:10, fontWeight:"bold"}}>Quest Date Range (optional)</Text>
-          <View style={{flexDirection:"row", alignItems:"center", justifyContent:"space-between"}}>
-            <TouchableOpacity style={[styles.button,{flex:1, marginRight:5, backgroundColor:'#74b9ff'}]} onPress={()=>setShowStartPicker(true)}>
-              <Text style={styles.buttonText}>{newQuest.startDate ? `Start: ${formatDate(newQuest.startDate)}` : 'Set Start Date'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.button,{flex:1, marginLeft:5, backgroundColor:'#55efc4'}]} onPress={()=>setShowEndPicker(true)}>
-              <Text style={styles.buttonText}>{newQuest.endDate ? `End: ${formatDate(newQuest.endDate)}` : 'Set End Date'}</Text>
-            </TouchableOpacity>
           </View>
-          {dateError ? <Text style={{color:'red',marginTop:6}}>{dateError}</Text> : null}
+        </Modal>
 
-          {showStartPicker && (
-            <DateTimePicker
-              value={newQuest.startDate ? new Date(newQuest.startDate) : new Date()}
-              mode="date"
-              display="default"
-              onChange={handleStartDateChange}
-              maximumDate={newQuest.endDate ? new Date(newQuest.endDate) : undefined}
-            />
-          )}
+        {/* Location Filter Modal */}
+        <Modal visible={locationFilterModal} animationType="slide" transparent={true}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.sheet, { backgroundColor: COLORS.mintCream }]}>
+              <Text style={styles.sheetTitle}>Filter by Location</Text>
 
-          {showEndPicker && (
-            <DateTimePicker
-              value={newQuest.endDate ? new Date(newQuest.endDate) : (newQuest.startDate ? new Date(newQuest.startDate) : new Date())}
-              mode="date"
-              display="default"
-              onChange={handleEndDateChange}
-              minimumDate={newQuest.startDate ? new Date(newQuest.startDate) : undefined}
-            />
-          )}
-
-          {/* Class Picker */}
-          <Text style={{marginTop:10, fontWeight:"bold"}}>Select Class:</Text>
-          <View style={{flexDirection:"row", marginVertical:5}}>
-            {CLASSES.map((c) => (
-              <TouchableOpacity
-                key={c.name}
-                style={{
-                  padding:10,
-                  marginRight:10,
-                  borderWidth: newQuest.class === c.name ? 2 : 1,
-                  borderColor: newQuest.class === c.name ? "#6c5ce7" : "#ccc",
-                  borderRadius:8,
-                  alignItems:"center"
-                }}
-                onPress={() => {
-                  setNewQuest({...newQuest,class:c.name});
-                  setFilteredBadges(BADGES.filter(b => b.class === c.name));
-                  setNewQuest(prev => ({...prev, badge:""}));
-                }}
-              >
-                <FontAwesome name={c.icon} size={24} color="#333" />
-                <Text>{c.name}</Text>
+              <TouchableOpacity style={[styles.buttonPrimary]} onPress={async ()=>{ try { const { status } = await Location.requestForegroundPermissionsAsync(); if (status !== 'granted') { Alert.alert('Permission denied', 'Location permission is required to use this filter.'); return; } const pos = await Location.getCurrentPositionAsync({}); const c = { lat: pos.coords.latitude, lng: pos.coords.longitude }; setLocationFilter(prev=> ({...prev, coords: c})); } catch (err) { console.warn('expo-location error', err); Alert.alert('Location error', err.message || 'Unable to get location'); } }}>
+                <Text style={styles.buttonText}>Use My Location</Text>
               </TouchableOpacity>
-            ))}
-          </View>
 
-          {/* Difficulty Stars */}
-          <Text style={{fontWeight:"bold"}}>Select Difficulty:</Text>
-          <View style={{flexDirection:"row", marginVertical:5}}>
-            {[1,2,3].map((star)=>(
-              <TouchableOpacity key={star} onPress={()=>setNewQuest({...newQuest,difficulty:star})}>
-                <FontAwesome
-                  name={star <= newQuest.difficulty ? "star" : "star-o"}
-                  size={32}
-                  color="#f1c40f"
-                  style={{marginRight:5}}
-                />
+              <Text style={{marginTop:10}}>Radius (km)</Text>
+              <TextInput keyboardType='numeric' value={String(locationFilter.radiusKm)} onChangeText={(t)=>{ const v = Number(t) || 0; setLocationFilter(prev=> ({...prev, radiusKm: v})); }} style={[styles.input, {backgroundColor: COLORS.azure}]} />
+
+              <Text style={{marginTop:8}}>Current: {locationFilter.coords ? `${locationFilter.coords.lat.toFixed(4)}, ${locationFilter.coords.lng.toFixed(4)}` : 'Not set'}</Text>
+
+              <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
+                <TouchableOpacity style={[styles.buttonTertiary,{flex:1, marginRight:6, backgroundColor: COLORS.cambridgeBlue}]} onPress={()=>{ setLocationFilter({coords:null, radiusKm:5}); setLocationFilterModal(false); }}>
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.buttonPrimary,{flex:1, marginLeft:6}]} onPress={()=>setLocationFilterModal(false)}>
+                  <Text style={styles.buttonText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Time Filter Modal */}
+        <Modal visible={timeFilterModal} animationType="slide" transparent={true}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.sheet, { backgroundColor: COLORS.azureWeb }]}>
+              <Text style={styles.sheetTitle}>Filter by Date</Text>
+              <TouchableOpacity style={[styles.buttonSecondary]} onPress={()=>setTimeFilterDate(new Date().toISOString())}>
+                <Text style={styles.buttonText}>Set to Today</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-          <Text>XP Reward: {newQuest.difficulty*10}</Text>
 
-          {/* Badge Picker */}
-          {filteredBadges.length > 0 && (
-            <>
-              <Text style={{fontWeight:"bold", marginTop:10}}>Select Badge Reward:</Text>
-              <View style={{flexDirection:"row", flexWrap:"wrap"}}>
-                {filteredBadges.map(b => (
-                  <TouchableOpacity
-                    key={b.name}
-                    style={{
-                      padding:8,
-                      borderWidth: newQuest.badge === b.name ? 2 : 1,
-                      borderColor: newQuest.badge === b.name ? "#6c5ce7" : "#ccc",
-                      borderRadius:8,
-                      margin:5
-                    }}
-                    onPress={()=>setNewQuest({...newQuest,badge:b.name})}
-                  >
-                    <Text>{b.name}</Text>
+              <View style={{marginTop:10}}>
+                <Text>Selected: {timeFilterDate ? (new Date(timeFilterDate)).toLocaleDateString() : 'Any date'}</Text>
+              </View>
+
+              <View style={{marginTop:8}}>
+                <DateTimePicker value={timeFilterDate ? new Date(timeFilterDate) : new Date()} mode="date" display="default" onChange={(e, d)=>{ if (d) setTimeFilterDate(d.toISOString()); }} />
+              </View>
+
+              <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
+                <TouchableOpacity style={[styles.buttonTertiary,{flex:1, marginRight:6, backgroundColor: COLORS.cambridgeBlue}]} onPress={()=>{ setTimeFilterDate(null); setTimeFilterModal(false); }}>
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.buttonPrimary,{flex:1, marginLeft:6}]} onPress={()=>setTimeFilterModal(false)}>
+                  <Text style={styles.buttonText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Create Quest Modal */}
+        <Modal visible={creatingQuest} animationType="slide">
+          <SafeAreaView style={[styles.modalContainer, { backgroundColor: COLORS.azure }]}>
+            <ScrollView style={{padding:16}}>
+              <TextInput placeholder="Title" style={styles.input} value={newQuest.title} onChangeText={(text)=>setNewQuest({...newQuest,title:text})} />
+              <TextInput placeholder="Description" style={[styles.input,{height:100}]} value={newQuest.description} onChangeText={(text)=>setNewQuest({...newQuest,description:text})} multiline />
+              <TextInput placeholder="Location (Optional)" style={styles.input} value={placeQuery || newQuest.location} onChangeText={(text)=>{ setPlaceQuery(text); setNewQuest({...newQuest, location: ''}); fetchPredictions(text); }} />
+
+              {predictions.length > 0 && (
+                <View style={{backgroundColor:COLORS.mintCream, borderRadius:8, marginBottom:6}}>
+                  {predictions.map(p => (
+                    <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { setNewQuest(prev=> ({...prev, location: details.name || details.address, placeCoords: details.coords })); setPlaceQuery(details.name || details.address); setPredictions([]); } }}>
+                      <Text>{p.description}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <TouchableOpacity style={[styles.buttonSecondary]} onPress={()=>pickImage(setNewQuestImage)}>
+                <Text style={styles.buttonText}>Pick Quest Image (Optional)</Text>
+              </TouchableOpacity>
+              {newQuestImage ? <Image source={{uri:newQuestImage}} style={{width:140,height:140,alignSelf:'center',borderRadius:10,marginVertical:8}} /> : null}
+
+              {/* Date Range */}
+              <Text style={{marginTop:10, fontWeight:"bold"}}>Quest Date Range (optional)</Text>
+              <View style={{flexDirection:"row", alignItems:"center", justifyContent:"space-between"}}>
+                <TouchableOpacity style={[styles.buttonSecondary,{flex:1, marginRight:6}]} onPress={()=>setShowStartPicker(true)}>
+                  <Text style={styles.buttonText}>{newQuest.startDate ? `Start: ${formatDate(newQuest.startDate)}` : 'Set Start Date'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.buttonSecondary,{flex:1, marginLeft:6}]} onPress={()=>setShowEndPicker(true)}>
+                  <Text style={styles.buttonText}>{newQuest.endDate ? `End: ${formatDate(newQuest.endDate)}` : 'Set End Date'}</Text>
+                </TouchableOpacity>
+              </View>
+              {dateError ? <Text style={{color:'red',marginTop:6}}>{dateError}</Text> : null}
+
+              {showStartPicker && (
+                <DateTimePicker value={newQuest.startDate ? new Date(newQuest.startDate) : new Date()} mode="date" display="default" onChange={handleStartDateChange} maximumDate={newQuest.endDate ? new Date(newQuest.endDate) : undefined} />
+              )}
+
+              {showEndPicker && (
+                <DateTimePicker value={newQuest.endDate ? new Date(newQuest.endDate) : (newQuest.startDate ? new Date(newQuest.startDate) : new Date())} mode="date" display="default" onChange={handleEndDateChange} minimumDate={newQuest.startDate ? new Date(newQuest.startDate) : undefined} />
+              )}
+
+              {/* Class Picker */}
+              <Text style={{marginTop:10, fontWeight:"bold"}}>Select Class:</Text>
+              <View style={{flexDirection:"row", marginVertical:5}}>
+                {CLASSES.map((c) => (
+                  <TouchableOpacity key={c.name} style={newQuest.class === c.name ? styles.classSelected : styles.classOption} onPress={() => { setNewQuest({...newQuest,class:c.name}); setFilteredBadges(BADGES.filter(b => b.class === c.name)); setNewQuest(prev => ({...prev, badge:""})); }}>
+                    <FontAwesome name={c.icon} size={22} color={COLORS.text} />
+                    <Text style={{color:COLORS.text}}>{c.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </>
-          )}
 
-          <TouchableOpacity style={[styles.button,{backgroundColor:"#6c5ce7"}]} onPress={handleCreateQuest}>
-            <Text style={styles.buttonText}>Create Quest</Text>
-          </TouchableOpacity>
+              {/* Difficulty Stars */}
+              <Text style={{fontWeight:"bold"}}>Select Difficulty:</Text>
+              <View style={{flexDirection:"row", marginVertical:5}}>
+                {[1,2,3].map((star)=>( <TouchableOpacity key={star} onPress={()=>setNewQuest({...newQuest,difficulty:star})}><FontAwesome name={star <= newQuest.difficulty ? "star" : "star-o"} size={28} color="#A4C3B2" style={{marginRight:8}} /></TouchableOpacity> ))}
+              </View>
+              <Text>XP Reward: {newQuest.difficulty*10}</Text>
 
-          <TouchableOpacity style={[styles.button,{backgroundColor:"#d63031"}]} onPress={()=>setCreatingQuest(false)}>
-            <Text style={styles.buttonText}>Cancel</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </Modal>
-    </View>
+              {/* Badge Picker */}
+              {filteredBadges.length > 0 && (
+                <>
+                  <Text style={{fontWeight:"bold", marginTop:10}}>Select Badge Reward:</Text>
+                  <View style={{flexDirection:"row", flexWrap:"wrap"}}>
+                    {filteredBadges.map(b => (
+                      <TouchableOpacity key={b.name} style={newQuest.badge === b.name ? styles.badgeSelected : styles.badgeOption} onPress={()=>setNewQuest({...newQuest,badge:b.name})}>
+                        <Text style={{color:COLORS.text}}>{b.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              <TouchableOpacity style={[styles.buttonPrimary]} onPress={handleCreateQuest}>
+                <Text style={styles.buttonText}>Create Quest</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.buttonTertiary]} onPress={()=>setCreatingQuest(false)}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor:"#fff", padding:15, borderRadius:10, marginBottom:10 },
-  title: { fontSize:18, fontWeight:"bold" },
-  endedTag: { backgroundColor:'#d63031', color:'#fff', paddingHorizontal:6, paddingVertical:2, borderRadius:4, marginRight:8, fontWeight:'bold' },
-  dateRange: { color:'#333', marginBottom:6, fontStyle:'italic' },
-  button: { padding:10, borderRadius:8, backgroundColor:"#6c5ce7", marginVertical:5 },
-  buttonText: { color:"#fff", textAlign:"center", fontWeight:"bold" },
-  createButton: { padding:15, borderRadius:10, backgroundColor:"#00b894", marginBottom:10 },
-  input: { backgroundColor:"#fff", padding:10, borderRadius:8, marginVertical:5 }
+  container: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 18) + 8 : 12,
+    backgroundColor: "#f6fff8ff"
+  },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  screenTitle: { fontSize: 24, fontWeight: '700', color: '#234' },
+
+  filterBar: { flexDirection:'row', justifyContent:'space-between', marginBottom:12 },
+  filterButton: { flex:1, marginHorizontal:4, paddingVertical:8, borderRadius:10, outlineColor:'#6B9080', outlineWidth: 1, textDecorationColor:'#6B9080', alignItems:'center' },
+  filterButtonActive: { backgroundColor: "#6b9080ff" },
+  filterText: { color: "#445", fontWeight:'600' },
+  filterTextActive: { color: "#fff" },
+
+  card: {
+    backgroundColor: "#ffffff",
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3
+  },
+  cardImage: { width:"100%", height:140, borderRadius:10, marginBottom:10 },
+  title: { fontSize:16, fontWeight:"700", color:"#1e372f" },
+  endedTag: { backgroundColor:'#6B9080', color:'#fff', paddingHorizontal:8, paddingVertical:4, borderRadius:6, marginRight:8, fontWeight:'700', overflow:'hidden' },
+  dateRange: { color:'#556', marginBottom:6, fontStyle:'italic' },
+  mutedText: { color:'#5a6b64' },
+  metaRow: { flexDirection:'row', justifyContent:'space-between', marginTop:6 },
+  metaText: { color:'#456', fontSize:13 },
+
+  createButton: { paddingVertical:8, paddingHorizontal:14, borderRadius:12, backgroundColor:"#6b9080ff" },
+  createButtonText: { color:"#fff", fontWeight:"700" },
+
+  button: { padding:10, borderRadius:10, backgroundColor:"#6c5ce7", marginVertical:6 },
+  buttonPrimary: { padding:12, borderRadius:10, backgroundColor:"#6b9080ff", marginVertical:8, alignItems:'center' },
+  buttonSecondary: { padding:12, borderRadius:10, backgroundColor:"#a4c3b2ff", marginVertical:8, alignItems:'center' },
+  buttonTertiary: { padding:12, borderRadius:10, backgroundColor:"#cbd6cf", marginVertical:8, alignItems:'center' },
+  buttonText: { color:"#fff", textAlign:"center", fontWeight:"700" },
+
+  input: { backgroundColor:"#fff", padding:12, borderRadius:10, marginVertical:8, borderColor:'#eee', borderWidth:1 },
+
+  postCard: { backgroundColor:'#fff', padding:10, borderRadius:10, marginVertical:8 },
+  composerBox: { backgroundColor: '#fff', padding: 10, borderRadius: 12, marginVertical: 10 },
+  smallButton: { padding:8, borderRadius:8, minWidth:90, marginRight:6, alignItems:'center' },
+  smallButtonText: { color:"#fff", fontWeight:'700' },
+  postImagePreview: { width:'100%', height:150, borderRadius:10, marginTop:8 },
+
+  modalContainer: { flex:1 },
+  modalImage: { width:'100%', height:220, borderRadius:12, marginBottom:12 },
+  modalTitle: { fontSize:22, fontWeight:'800', color:'#123' },
+  sectionTitle: { marginTop:18, fontWeight:'700', fontSize:16, color:'#234' },
+
+  separator: { height:1, backgroundColor:'#e6ece6', marginVertical:12, borderRadius:1 },
+
+  avatar: { width:44, height:44, borderRadius:22, marginRight:8 },
+  avatarSmall: { width:36, height:36, borderRadius:18, marginRight:8 },
+
+  modalBackdrop: { flex:1, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center' },
+  sheet: { marginHorizontal:18, borderRadius:12, padding:14, shadowColor:'#000', shadowOpacity:0.08, shadowRadius:10, elevation:6 },
+  sheetTitle: { fontSize:18, fontWeight:'700', marginBottom:8 },
+  sheetRow: { flexDirection:'row', alignItems:'center', paddingVertical:8 },
+  checkbox: { width:22, height:22, borderRadius:6, borderWidth:1, borderColor:'#888', marginRight:10, backgroundColor:'#fff' },
+  sheetText: { color:'#234' },
+
+  classOption: { padding:10, marginRight:10, borderWidth:1, borderColor:'#e6e6e6', borderRadius:10, alignItems:'center', width:88 },
+  classSelected: { padding:10, marginRight:10, borderWidth:2, borderColor:'#6b9080ff', borderRadius:10, backgroundColor:'#f6fff8ff', alignItems:'center', width:88 },
+
+  badgeOption: { padding:8, borderWidth:1, borderColor:'#e6e6e6', borderRadius:10, margin:6 },
+  badgeSelected: { padding:8, borderWidth:2, borderColor:'#6b9080ff', borderRadius:10, margin:6, backgroundColor:'#f6fff8ff' }
 });
 
 // Additional styles added for posts and composer
 Object.assign(styles, StyleSheet.create({
   postCard: { backgroundColor:'#fff', padding:10, borderRadius:8, marginVertical:6 },
-  composerBox: { backgroundColor:'#f0f0f0', padding:10, borderRadius:8, marginVertical:10 },
+  composerBox: { backgroundColor:'#fff', padding:10, borderRadius:8, marginVertical:10 },
   postsSection: { marginTop:8 },
   buttonSmall: { padding:8, borderRadius:8, backgroundColor:'#6c5ce7', minWidth:90, marginRight:6 },
   postImagePreview: { width:'100%', height:150, borderRadius:8, marginTop:8 }

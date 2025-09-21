@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, Image, FlatList, Alert, ScrollView } from 'react-native';
+import styles, { colors } from './styles';
 import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, getDoc, arrayRemove } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import * as ImagePicker from 'expo-image-picker';
@@ -232,11 +233,11 @@ export default function Guilds() {
   };
 
   return (
-    <View style={{flex:1, padding:12, backgroundColor:'#f7f1e3'}}>
-      <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom:8}}>
+    <View style={styles.safeArea}>
+      <View style={styles.headerRow}>
         <View style={{flexDirection:'row'}}>
-          <TouchableOpacity style={[styles.buttonSmall, {marginRight:6, backgroundColor: viewMode==='discover' ? '#0984e3' : '#6c5ce7'}]} onPress={()=>setViewMode('discover')}><Text style={styles.buttonText}>Discover</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.buttonSmall, {backgroundColor: viewMode==='my' ? '#0984e3' : '#6c5ce7'}]} onPress={()=>setViewMode('my')}><Text style={styles.buttonText}>My Guilds</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.buttonSmall, {marginRight:6, backgroundColor: viewMode==='discover' ? colors.viridian : colors.cambridgeBlue}]} onPress={()=>setViewMode('discover')}><Text style={styles.buttonText}>Discover</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.buttonSmall, {backgroundColor: viewMode==='my' ? colors.viridian : colors.cambridgeBlue}]} onPress={()=>setViewMode('my')}><Text style={styles.buttonText}>My Guilds</Text></TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.createButton} onPress={()=>setCreating(true)}>
           <Text style={styles.buttonText}>Create Guild</Text>
@@ -244,19 +245,19 @@ export default function Guilds() {
       </View>
 
       {/* Filters: class + location */}
-      <View style={{flexDirection:'row', marginBottom:8}}>
+      <View style={styles.filterRow}>
         <View style={{flex:1, marginRight:6}}>
-          <Text style={{fontWeight:'700'}}>Class</Text>
-          <TouchableOpacity style={{padding:8, marginTop:6, borderRadius:8, borderWidth:1, borderColor:'#ccc'}} onPress={()=>setClassFilterModal(true)}>
-            <Text>{selectedClasses.length > 0 ? selectedClasses.join(', ') : 'All'}</Text>
+          <Text style={{fontWeight:'700', color: colors.textDark}}>Class</Text>
+          <TouchableOpacity style={{padding:10, marginTop:6, borderRadius:10, borderWidth:1, borderColor:colors.cambridgeBlue, backgroundColor: colors.mintCream}} onPress={()=>setClassFilterModal(true)}>
+            <Text style={{color: colors.textDark}}>{selectedClasses.length > 0 ? selectedClasses.join(', ') : 'All'}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={{flex:1}}>
-          <Text style={{fontWeight:'700'}}>Location</Text>
+          <Text style={{fontWeight:'700', color: colors.textDark}}>Location</Text>
           <TextInput placeholder='City' value={placeQuery} onChangeText={t=>{ setPlaceQuery(t); fetchPredictions(t); }} style={styles.input} />
           {predictions.length>0 && (
-            <View style={{backgroundColor:'#fff', borderRadius:8, padding:6}}>
+            <View style={{backgroundColor:colors.mintCream, borderRadius:8, padding:6}}>
               {predictions.map(p => (
                 <TouchableOpacity key={p.place_id} style={{padding:6}} onPress={async ()=>{
                   const d = await fetchPlaceDetails(p.place_id);
@@ -266,7 +267,7 @@ export default function Guilds() {
                     setPredictions([]);
                   }
                 }}>
-                  <Text>{p.description}</Text>
+                  <Text style={{color: colors.textDark}}>{p.description}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -274,7 +275,7 @@ export default function Guilds() {
         </View>
       </View>
 
-      <FlatList data={guilds.filter(g=>{
+  <FlatList data={guilds.filter(g=>{
         // view mode filter
         if (viewMode==='my' && !(currentUserGuilds.includes(g.id) || (g.members && g.members.includes(auth.currentUser?.uid)))) return false;
         // class filter (multi-select)
@@ -286,13 +287,13 @@ export default function Guilds() {
         return true;
       })} keyExtractor={i=>i.id} renderItem={({item})=>(
         <TouchableOpacity style={styles.guildCard} onPress={()=>openGuild(item)}>
-          {item.icon ? <Image source={{uri:item.icon}} style={{width:64,height:64,borderRadius:8,marginRight:10}} /> : <View style={{width:64,height:64,borderRadius:8,backgroundColor:'#ddd',marginRight:10,alignItems:'center',justifyContent:'center'}}><Text>G</Text></View>}
+          {item.icon ? <Image source={{uri:item.icon}} style={{width:64,height:64,borderRadius:12,marginRight:12}} /> : <View style={{width:64,height:64,borderRadius:12,backgroundColor:colors.cambridgeBlue,marginRight:12,alignItems:'center',justifyContent:'center'}}><Text style={{color:'#fff',fontWeight:'700'}}>G</Text></View>}
           <View style={{flex:1}}>
-            <Text style={{fontWeight:'700'}}>{item.name}</Text>
-            <Text style={{color:'#555'}}>{item.description}</Text>
-            <Text style={{marginTop:6}}>{plural((item.members||[]).length || item.membersCount || 0, 'member')} • Class: {item.class} • {item.location || ''}</Text>
+            <Text style={{fontWeight:'800', color: colors.textDark}}>{item.name}</Text>
+            <Text style={{color: colors.textMuted}} numberOfLines={2}>{item.description}</Text>
+            <Text style={{marginTop:6, color: colors.textMuted}}>{plural((item.members||[]).length || item.membersCount || 0, 'member')} • Class: {item.class} • {item.location || ''}</Text>
           </View>
-          <TouchableOpacity style={[styles.buttonSmall,{minWidth:80}]} onPress={()=>handleJoinGuild(item)}>
+          <TouchableOpacity style={[styles.buttonSmall,{minWidth:80, backgroundColor: colors.viridian}]} onPress={()=>handleJoinGuild(item)}>
             <Text style={styles.buttonText}>Join</Text>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -300,7 +301,7 @@ export default function Guilds() {
 
       {/* Create Guild Modal */}
       <Modal visible={creating} animationType='slide'>
-        <ScrollView style={{padding:12}}>
+        <ScrollView style={styles.modalScroll}>
           <TextInput placeholder='Guild name' style={styles.input} value={newGuild.name} onChangeText={t=>setNewGuild(prev=>({...prev, name:t}))} />
           <TextInput placeholder='Description' style={[styles.input,{height:100}]} value={newGuild.description} onChangeText={t=>setNewGuild(prev=>({...prev, description:t}))} multiline />
           <TextInput placeholder='Location (city/state)' style={styles.input} value={placeQuery || newGuild.location} onChangeText={t=>{
@@ -310,7 +311,7 @@ export default function Guilds() {
           }} />
 
           {predictions.length > 0 && (
-            <View style={{backgroundColor:'#fff', borderRadius:8, marginBottom:6}}>
+            <View style={{backgroundColor:colors.mintCream, borderRadius:8, marginBottom:6}}>
               {predictions.map(p => (
                 <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{
                   const details = await fetchPlaceDetails(p.place_id);
@@ -338,32 +339,32 @@ export default function Guilds() {
           <TouchableOpacity style={styles.button} onPress={()=>pickImage(setNewGuildIcon)}>
             <Text style={styles.buttonText}>Pick Icon (optional)</Text>
           </TouchableOpacity>
-          {newGuildIcon ? <Image source={{uri:newGuildIcon}} style={{width:120,height:120,alignSelf:'center',borderRadius:8,marginVertical:8}} /> : null}
+          {newGuildIcon ? <Image source={{uri:newGuildIcon}} style={{width:120,height:120,alignSelf:'center',borderRadius:12,marginVertical:8}} /> : null}
 
-          <TouchableOpacity style={[styles.button,{backgroundColor:'#6c5ce7'}]} onPress={handleCreateGuild}><Text style={styles.buttonText}>Create Guild</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.button,{backgroundColor:colors.viridian}]} onPress={handleCreateGuild}><Text style={styles.buttonText}>Create Guild</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.button,{backgroundColor:'#d63031'}]} onPress={()=>setCreating(false)}><Text style={styles.buttonText}>Cancel</Text></TouchableOpacity>
         </ScrollView>
       </Modal>
 
       {/* Class Filter Modal */}
       <Modal visible={classFilterModal} animationType='slide' transparent={true}>
-        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center'}}>
-          <View style={{margin:20, backgroundColor:'#fff', borderRadius:8, padding:12}}>
-            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8}}>Filter by Class</Text>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalPaper}>
+            <Text style={{fontSize:18,fontWeight:'bold', marginBottom:8, color: colors.textDark}}>Filter by Class</Text>
             {CLASSES.map(c => (
               <TouchableOpacity key={c} style={{flexDirection:'row',alignItems:'center',padding:8}} onPress={()=>{
                 setSelectedClasses(prev => prev.includes(c) ? prev.filter(x=>x!==c) : [...prev, c]);
               }}>
-                <View style={{width:22,height:22,borderRadius:4, borderWidth:1, borderColor:'#666', marginRight:10, backgroundColor: selectedClasses.includes(c) ? '#6c5ce7' : '#fff'}} />
-                <Text>{c}</Text>
+                <View style={{width:22,height:22,borderRadius:4, borderWidth:1, borderColor: colors.textMuted, marginRight:10, backgroundColor: selectedClasses.includes(c) ? colors.cambridgeBlue : colors.mintCream}} />
+                <Text style={{color: colors.textDark}}>{c}</Text>
               </TouchableOpacity>
             ))}
 
             <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
-              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:'#b2bec3'}]} onPress={()=>{ setSelectedClasses([]); setClassFilterModal(false); }}>
+              <TouchableOpacity style={[styles.button,{flex:1, marginRight:6, backgroundColor:colors.mintGreen}]} onPress={()=>{ setSelectedClasses([]); setClassFilterModal(false); }}>
                 <Text style={styles.buttonText}>Clear</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:'#6c5ce7'}]} onPress={()=>setClassFilterModal(false)}>
+              <TouchableOpacity style={[styles.button,{flex:1, marginLeft:6, backgroundColor:colors.viridian}]} onPress={()=>setClassFilterModal(false)}>
                 <Text style={styles.buttonText}>Apply</Text>
               </TouchableOpacity>
             </View>
@@ -373,27 +374,27 @@ export default function Guilds() {
 
       {/* Guild Detail Modal */}
       <Modal visible={modalVisible} animationType='slide'>
-        <ScrollView style={{padding:12}}>
+        <ScrollView style={styles.modalScroll}>
           {selectedGuild && (
             <>
               <View style={{flexDirection:'row', alignItems:'center', marginBottom:10}}>
-                {selectedGuild.icon ? <Image source={{uri:selectedGuild.icon}} style={{width:80,height:80,borderRadius:8,marginRight:12}} /> : null}
+                {selectedGuild.icon ? <Image source={{uri:selectedGuild.icon}} style={{width:80,height:80,borderRadius:12,marginRight:12}} /> : null}
                 <View style={{flex:1}}>
-                  <Text style={{fontSize:20,fontWeight:'700'}}>{selectedGuild.name}</Text>
-                  <Text style={{color:'#555'}}>{selectedGuild.description}</Text>
-                  <Text style={{marginTop:6}}>{plural((selectedGuild.members||[]).length || selectedGuild.membersCount || 0, 'member')} • Class: {selectedGuild.class} • {selectedGuild.location || ''}</Text>
+                  <Text style={{fontSize:20,fontWeight:'800', color: colors.textDark}}>{selectedGuild.name}</Text>
+                  <Text style={{color: colors.textMuted}}>{selectedGuild.description}</Text>
+                  <Text style={{marginTop:6, color: colors.textMuted}}>{plural((selectedGuild.members||[]).length || selectedGuild.membersCount || 0, 'member')} • Class: {selectedGuild.class} • {selectedGuild.location || ''}</Text>
                 </View>
                 {isUserMemberOf(selectedGuild) ? (
                   <TouchableOpacity style={[styles.buttonSmall,{minWidth:90, backgroundColor:'#d63031'}]} onPress={()=>handleLeaveGuild(selectedGuild)}><Text style={styles.buttonText}>Leave</Text></TouchableOpacity>
                 ) : (
-                  <TouchableOpacity style={[styles.buttonSmall,{minWidth:90}]} onPress={()=>handleJoinGuild(selectedGuild)}><Text style={styles.buttonText}>Join</Text></TouchableOpacity>
+                  <TouchableOpacity style={[styles.buttonSmall,{minWidth:90, backgroundColor: colors.viridian}]} onPress={()=>handleJoinGuild(selectedGuild)}><Text style={styles.buttonText}>Join</Text></TouchableOpacity>
                 )}
               </View>
 
               <View style={{marginTop:8}}>
-                <Text style={{fontSize:18,fontWeight:'700'}}>Guild Quest Feed</Text>
+                <Text style={{fontSize:18,fontWeight:'700', color: colors.textDark}}>Guild Quest Feed</Text>
                 {isUserMemberOf(selectedGuild) ? (
-                  <TouchableOpacity style={[styles.button,{marginTop:8, backgroundColor:'#74b9ff'}]} onPress={()=>setCreatingQuest(true)}>
+                  <TouchableOpacity style={[styles.button,{marginTop:8, backgroundColor:colors.cambridgeBlue}]} onPress={()=>setCreatingQuest(true)}>
                     <Text style={styles.buttonText}>Create Quest for Guild</Text>
                   </TouchableOpacity>
                 ) : (
@@ -416,7 +417,7 @@ export default function Guilds() {
 
               {/* Create quest inline modal */}
               <Modal visible={creatingQuest} animationType='slide'>
-                <ScrollView style={{padding:12}}>
+                <ScrollView style={styles.modalScroll}>
                   <TextInput placeholder='Title' style={styles.input} value={guildQuest.title} onChangeText={t=>setGuildQuest(prev=>({...prev,title:t}))} />
                   <TextInput placeholder='Description' style={[styles.input,{height:100}]} value={guildQuest.description} onChangeText={t=>setGuildQuest(prev=>({...prev,description:t}))} multiline />
 
@@ -430,7 +431,7 @@ export default function Guilds() {
                   </View>
 
                   <TouchableOpacity style={styles.button} onPress={()=>pickImage(uri=>setGuildQuest(prev=>({...prev,image:uri})))}><Text style={styles.buttonText}>Pick Image (optional)</Text></TouchableOpacity>
-                  {guildQuest.image ? <Image source={{uri:guildQuest.image}} style={{width:120,height:120,alignSelf:'center',borderRadius:8,marginVertical:8}} /> : null}
+                  {guildQuest.image ? <Image source={{uri:guildQuest.image}} style={{width:120,height:120,alignSelf:'center',borderRadius:12,marginVertical:8}} /> : null}
 
                   {/* Badge picker: show badges for the guild's class */}
                   <Text style={{fontWeight:'bold', marginTop:10}}>Badge Reward (optional)</Text>
@@ -443,14 +444,14 @@ export default function Guilds() {
                     {BADGES.filter(b => b.class === selectedGuild?.class).length === 0 && <Text style={{color:'#666'}}>No badges for this class.</Text>}
                   </View>
 
-                  <TouchableOpacity style={[styles.button,{backgroundColor:'#6c5ce7'}]} onPress={async ()=>{ await handleCreateQuestForGuild(selectedGuild, guildQuest); setCreatingQuest(false); setGuildQuest({ title:'', description:'', difficulty:1, badge:'', image:null }); }}><Text style={styles.buttonText}>Create Quest</Text></TouchableOpacity>
+                  <TouchableOpacity style={[styles.button,{backgroundColor:colors.viridian}]} onPress={async ()=>{ await handleCreateQuestForGuild(selectedGuild, guildQuest); setCreatingQuest(false); setGuildQuest({ title:'', description:'', difficulty:1, badge:'', image:null }); }}><Text style={styles.buttonText}>Create Quest</Text></TouchableOpacity>
                   <TouchableOpacity style={[styles.button,{backgroundColor:'#d63031'}]} onPress={()=>setCreatingQuest(false)}><Text style={styles.buttonText}>Cancel</Text></TouchableOpacity>
                 </ScrollView>
               </Modal>
 
               {/* Quest Detail Modal */}
               <Modal visible={questDetailModal} animationType='slide'>
-                <ScrollView style={{padding:12}}>
+                <ScrollView style={styles.modalScroll}>
                   {viewingQuest && (
                     <>
                       {viewingQuest.image ? <Image source={{uri:viewingQuest.image}} style={{width:'100%',height:180,borderRadius:8,marginBottom:8}} /> : null}
@@ -473,7 +474,7 @@ export default function Guilds() {
                       {/* Composer only for members */}
                       {isUserMemberOf(selectedGuild) ? (
                         <>
-                          <TextInput placeholder='Write a post...' style={[styles.input,{backgroundColor:'#fff'}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
+                          <TextInput placeholder='Write a post...' style={[styles.input,{backgroundColor:colors.mintCream}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
                           <View style={{flexDirection:'row', justifyContent:'space-between'}}>
                             <TouchableOpacity style={styles.buttonSmall} onPress={()=>pickImage(setNewPostImage)}><Text style={styles.buttonText}>Add Image</Text></TouchableOpacity>
                             <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#00b894'}]} onPress={async ()=>{
@@ -511,13 +512,4 @@ export default function Guilds() {
   );
 }
 
-const styles = StyleSheet.create({
-  createButton: { padding:12, borderRadius:10, backgroundColor:'#00b894', marginBottom:10 },
-  buttonText: { color:'#fff', textAlign:'center', fontWeight:'700' },
-  input: { backgroundColor:'#fff', padding:10, borderRadius:8, marginVertical:6 },
-  guildCard: { flexDirection:'row', alignItems:'center', backgroundColor:'#fff', padding:10, borderRadius:10, marginBottom:8 },
-  button: { padding:10, borderRadius:8, backgroundColor:'#6c5ce7', marginVertical:6 },
-  buttonSmall: { padding:8, borderRadius:8, backgroundColor:'#6c5ce7', minWidth:80, alignItems:'center', justifyContent:'center' },
-  card: { backgroundColor:'#fff', padding:12, borderRadius:8, marginBottom:8 },
-  title: { fontWeight:'700', fontSize:16 }
-});
+

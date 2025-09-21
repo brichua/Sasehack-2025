@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
@@ -7,6 +7,7 @@ import { ref, uploadBytes, getDownloadURL, uploadString } from "firebase/storage
 import * as FileSystem from "expo-file-system";
 import { Link } from "@react-navigation/native";
 import { auth, db, storage } from "./firebase";
+import styles, { colors } from './styles';
 
 
 export default function Signup({ navigation }) {
@@ -62,33 +63,28 @@ export default function Signup({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Sign Up</Text>
-      <TouchableOpacity onPress={pickImage} style={styles.avatarPicker}>
-        {avatar ? <Image source={{ uri: avatar }} style={styles.avatar} /> : <Text style={{ textAlign: "center" }}>Pick Avatar</Text>}
-      </TouchableOpacity>
-      <TextInput placeholder="Display Name" style={styles.input} value={displayName} onChangeText={setDisplayName} />
-      <TextInput placeholder="Email" style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-      <TextInput placeholder="Password" style={styles.input} value={password} onChangeText={setPassword} secureTextEntry />
-      <TouchableOpacity style={styles.button} onPress={handleSignup}>
-        <Text style={styles.buttonText}>Sign Up</Text>
-      </TouchableOpacity>
+    <View style={styles.safeArea}>
+      <View style={{flex:1, justifyContent:'center'}}>
+        <Text style={{fontSize:24, fontWeight:'800', textAlign:'center', color: colors.textDark, marginBottom:12}}>Create Account</Text>
 
-      <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-      <Text style={{ color: "blue", textAlign: "center", marginTop: 10 }}>
-        I already have an account.
-      </Text>
-    </TouchableOpacity>
+        <TouchableOpacity onPress={pickImage} style={styles.avatarPicker}>
+          {avatar ? <Image source={{ uri: avatar }} style={styles.avatar} /> : <Text style={{ textAlign: "center", color: colors.textDark }}>Pick Avatar</Text>}
+        </TouchableOpacity>
+
+        <TextInput placeholder="Display Name" style={styles.input} value={displayName} onChangeText={setDisplayName} />
+        <TextInput placeholder="Email" style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+        <TextInput placeholder="Password" style={styles.input} value={password} onChangeText={setPassword} secureTextEntry />
+
+        <TouchableOpacity style={[styles.button,{backgroundColor: colors.viridian}]} onPress={handleSignup}>
+          <Text style={styles.buttonText}>Sign Up</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <Text style={{ color: colors.cambridgeBlue, textAlign: "center", marginTop: 10 }}>
+            I already have an account.
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, justifyContent: "center", backgroundColor: "#f7f1e3" },
-  header: { fontSize: 28, fontWeight: "bold", marginBottom: 20, textAlign: "center" },
-  input: { backgroundColor: "#fff", padding: 12, borderRadius: 8, marginBottom: 12 },
-  button: { backgroundColor: "#6c5ce7", padding: 15, borderRadius: 8 },
-  buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
-  avatarPicker: { backgroundColor: "#fff", padding: 10, borderRadius: 50, marginBottom: 12, alignSelf: "center", width: 100, height: 100, justifyContent: "center" },
-  avatar: { width: 100, height: 100, borderRadius: 50 },
-});
