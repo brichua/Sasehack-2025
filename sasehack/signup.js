@@ -54,7 +54,7 @@ export default function Signup({ navigation }) {
       const avatarUrl = avatar || null;
 
 
-      await setDoc(doc(db, "Users", user.uid), { displayName, email, avatarUrl, createdAt: new Date(), xp: 0, badges: [] });
+      await setDoc(doc(db, "Users", user.uid), { displayName, email, avatarUrl, createdAt: new Date(), xp: 0, badges: [], level: 1 });
 
       navigation.replace("MainTabs");
     } catch (error) {
