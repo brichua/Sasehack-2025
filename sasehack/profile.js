@@ -8,6 +8,7 @@ import {
   Dimensions,
   ScrollView,
   ActivityIndicator,
+  FlatList
 } from "react-native";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db, auth } from "./firebase";
@@ -52,7 +53,7 @@ export default function Profile({ navigation }) {
         setLoadingUser(false);
       }
     );
-
+    
     return () => unsubscribe();
   }, [uid]);
 
@@ -195,10 +196,24 @@ const getCompletedQuestCountsByClass = () => {
     navigation.replace("Login");
   };
 
+  
+
+  const renderBadge = ({ item }) => {
+      console.log("Badge item:", item);
+      return (
+        <View style={[styles.badgeContainer, { width: windowWidth * 0.8 }]}>
+          <Text style={styles.badgeTitle}>{item.title || "No title"}</Text>
+          <Text style={styles.badgeProgress}>Progress: {item.progress || "0"}</Text>
+          <Text style={styles.badgeTier}>Tier: {item.tier || "0"}</Text>
+        </View>
+      );
+};
+
+
   // ------------------ RENDER ------------------
   if (loadingUser) return <Text style={{ textAlign: "center", marginTop: 50 }}>Loading user...</Text>;
   const questCounts = getCompletedQuestCountsByClass();
-
+ 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#f7f1e3" }}>
       <ScrollView>
@@ -207,6 +222,22 @@ const getCompletedQuestCountsByClass = () => {
           <Text style={styles.name}>{user?.displayName}</Text>
           <Text style={styles.email}>{user?.email}</Text>
           <Text style={styles.xp}>XP: {user?.xp || 0}</Text>
+
+        <Text style={styles.sectionTitle}>Badges:</Text>
+        
+        <Text style = {{marginBottom: 20}}>
+        <FlatList
+          data={user?.badges ? Object.entries(user.badges).map(([key, value]) => ({ id: key, ...value })) : []}
+          renderItem={renderBadge}
+          keyExtractor={(item) => item.id}
+          pagingEnabled
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: windowWidth * 0.1, paddingBottom: 0 }}
+          style={{ height: 120}}
+        />
+        </Text>
+        
 
           {/* Toggle Tabs */}
           <View style={styles.toggleContainer}>
@@ -305,4 +336,31 @@ const styles = StyleSheet.create({
   questBadgeTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 4 },
   questBadgeDesc: { fontSize: 12, textAlign: "center", marginBottom: 4 },
   dateRange: { fontSize: 12, color: "#636e72" },
+  sectionTitle: { fontSize: 24, marginBottom: 5, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
+  questTitle: { fontSize: 24, marginBottom: 2, marginTop: 20, alignSelf: "flex-start", paddingLeft: 16, fontWeight: "bold", textDecorationLine: "underline" },
+  button: { backgroundColor: "#6c5ce7", padding: 12, borderRadius: 8, width: 200, marginVertical: 20 },
+  buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
+  badgeContainer: {
+    height: 100,
+    marginHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f0f0f0",
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 20,
+    marginBottom: 20, // increase margin between cards
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  badgeIcon: { width: 80, height: 80, borderRadius: 40, marginBottom: 10 },
+  badgeTitle: { fontSize: 16, fontWeight: "bold" },
+  badgeDesc: { fontSize: 12, textAlign: "center", marginVertical: 4 },
+  badgeProgress: { fontSize: 12 },
+  badgeTier: { fontSize: 12, fontStyle: "italic", paddingBottom: 20 },
 });
+
+
