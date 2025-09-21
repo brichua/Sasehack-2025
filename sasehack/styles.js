@@ -85,4 +85,5 @@ export default StyleSheet.create({
   filterButtonActive: { backgroundColor: "#6b9080ff" },
   filterText: { color: "#445", fontWeight:'600' },
   filterTextActive: { color: "#fff" },
+  endedTag: { backgroundColor:'#6B9080', color:'#fff', paddingHorizontal:8, paddingVertical:4, borderRadius:6, marginRight:8, fontWeight:'700', overflow:'hidden' },
 });
