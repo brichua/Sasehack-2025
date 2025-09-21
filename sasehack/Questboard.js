@@ -463,7 +463,7 @@ export default function Questboard() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: COLORS.azureWeb }]}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.mintCream} />
-      <ScrollView style={{flex:1}} contentContainerStyle={{paddingBottom:20}}>
+  <View style={{flex:1, paddingBottom:20}}>
         <View style={styles.headerRow}>
           <Text style={styles.screenTitle}>Questboard</Text>
           <TouchableOpacity style={styles.createButton} onPress={()=>setCreatingQuest(true)}>
@@ -760,7 +760,7 @@ export default function Questboard() {
             </ScrollView>
           </SafeAreaView>
         </Modal>
-      </ScrollView>
+  </View>
     </SafeAreaView>
   );
 }
