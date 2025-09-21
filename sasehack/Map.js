@@ -5,14 +5,87 @@ import * as Location from 'expo-location';
 import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import * as ImagePicker from 'expo-image-picker';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, FontAwesome6 } from '@expo/vector-icons';
 import styles, { colors } from './styles';
 
-const CLASS_ICONS = {
-  Explorer: 'map',
-  Baker: 'cutlery',
-  Artist: 'paint-brush'
+const CLASSES = [
+  { name: 'Explorer', icon: 'map' },
+  { name: 'Artist', icon: 'paintbrush' },
+  { name: 'Performer', icon: 'masks-theater' },
+  { name: 'Musician', icon: 'music' },
+  { name: 'Foodie', icon: 'utensils' },
+  { name: 'Historian', icon: 'landmark' },
+  { name: 'Connector', icon: 'champagne-glasses' },
+];
+
+const BADGES = [
+  { name: 'Trailblazer', class: 'Explorer', icon: 'person-hiking' },
+  { name: 'Urban Explorer', class: 'Explorer', icon: 'city' },
+  { name: 'Sketcher', class: 'Artist', icon: 'brush' },
+  { name: 'Hands-on Artist', class: 'Artist', icon: 'cube' },
+  { name: 'Creative Spark', class: 'Artist', icon: 'palette' },
+  { name: 'Film Buff', class: 'Performer', icon: 'film' },
+  { name: 'Broadway Bound', class: 'Performer', icon: 'masks-theater' },
+  { name: 'Theater Aficionado', class: 'Performer', icon: 'ticket' },
+  { name: 'Future Virtuoso', class: 'Musician', icon: 'guitar' },
+  { name: 'Concert Connoisseur', class: 'Musician', icon: 'music' },
+  { name: 'Chef', class: 'Foodie', icon: 'kitchen-set' },
+  { name: 'Baker', class: 'Foodie', icon: 'cake-candles' },
+  { name: 'Taste Tester', class: 'Foodie', icon: 'pizza-slice' },
+  { name: 'Something Sweet', class: 'Foodie', icon: 'mug-hot' },
+  { name: 'Time Traveler', class: 'Historian', icon: 'archway' },
+  { name: 'Walking through Time', class: 'Historian', icon: 'building-columns' },
+  { name: 'Social Butterfly', class: 'Connector', icon: 'gifts' },
+  { name: 'Community Enthusiast', class: 'Connector', icon: 'calendar' },
+  { name: 'Stadium Regular', class: 'Connector', icon: 'football' },
+];
+
+// Icon aliasing to handle FontAwesome6 name differences
+const ICON_ALIASES = {
+  'cutlery': 'utensils',
+  'map': 'map',
+  'paint-brush': 'paintbrush',
+  'paintbrush': 'paintbrush',
+  'guitar': 'guitar',
+  'music': 'music',
+  'cookie-bite': 'cookie-bite',
+  'cookie': 'cookie',
+  'bread-slice': 'bread-slice',
+  'birthday-cake': 'cake-candles',
+  'mug-hot': 'mug-hot',
+  'city': 'city',
+  'landmark': 'landmark',
+  'route': 'route',
+  'pen-nib': 'pen-nib',
+  'spray-can': 'spray-can',
+  'theater-masks': 'masks-theater',
+  'masks-theater': 'masks-theater',
+  'star': 'star',
+  'monument': 'monument',
+  'book': 'book',
+  'hands-helping': 'hands-helping',
+  'user-friends': 'user-friends',
+  'paintbrush': 'paintbrush',
+  'brush': 'brush',
+  'person-hiking': 'person-hiking',
+  'palette': 'palette',
+  'cube': 'cube',
+  'film': 'film',
+  'ticket': 'ticket',
+  'kitchen-set': 'kitchen-set',
+  'cake-candles': 'cake-candles',
+  'pizza-slice': 'pizza-slice',
+  'archway': 'archway',
+  'building-columns': 'building-columns',
+  'champagne-glasses': 'champagne-glasses',
+  'gifts': 'gifts',
+  'calendar': 'calendar',
+  'football': 'football'
 };
+
+const normalizeIcon = (name) => ICON_ALIASES[name] || name || 'question';
+
+const BADGE_ICONS = BADGES.reduce((m,b)=>{ m[b.name] = b.icon || 'trophy'; return m; }, {});
 
 export default function MapScreen() {
   const [quests, setQuests] = useState([]);
@@ -62,8 +135,17 @@ export default function MapScreen() {
     // optionally refresh quest data from Firestore
     try {
       const qdoc = await getDoc(doc(db, 'Quests', quest.id));
-      if (qdoc.exists()) setSelectedQuest({ id: qdoc.id, ...qdoc.data() });
-      else setSelectedQuest(quest);
+      if (qdoc.exists()) {
+        const qdata = { id: qdoc.id, ...qdoc.data() };
+        // If quest references a guildId but doesn't embed guild, try to fetch guild doc
+        if (!qdata.guild && qdata.guildId) {
+          try {
+            const gdoc = await getDoc(doc(db, 'Guilds', qdata.guildId));
+            if (gdoc.exists()) qdata.guild = { id: gdoc.id, ...(gdoc.data() || {}) };
+          } catch (e) { /* ignore guild fetch errors */ }
+        }
+        setSelectedQuest(qdata);
+      } else setSelectedQuest(quest);
     } catch (e) {
       setSelectedQuest(quest);
     }
@@ -210,7 +292,7 @@ export default function MapScreen() {
             onPress={() => openQuest(q)}
           >
             <View style={styles.pin}>
-              <FontAwesome name={CLASS_ICONS[q.class] || 'map-o'} size={18} color="#fff" />
+              <FontAwesome6 name={normalizeIcon((CLASSES.find(c=>c.name===q.class) || {icon:'map'}).icon)} size={18} color="#fff" solid />
             </View>
           </Marker>
         ))}
@@ -223,7 +305,7 @@ export default function MapScreen() {
               {selectedQuest.image ? <Image source={{uri:selectedQuest.image}} style={{width:'100%',height:220,borderRadius:8,marginBottom:12}} /> : null}
               <View style={{flexDirection:'row', alignItems:'center', marginTop:0}}>
                 <View style={{width:40,height:40,borderRadius:20,backgroundColor: colors.viridian,alignItems:'center',justifyContent:'center',marginRight:12}}>
-                  <FontAwesome name={CLASS_ICONS[selectedQuest.class] || 'map-o'} size={18} color="#fff" />
+                  <FontAwesome6 name={normalizeIcon((CLASSES.find(c=>c.name===selectedQuest.class) || {icon:'map'}).icon)} size={18} color="#fff" solid />
                 </View>
                 <Text style={{fontSize:22,fontWeight:'800', color: colors.textDark, flexShrink:1}}>{selectedQuest.title}</Text>
               </View>
@@ -245,15 +327,32 @@ export default function MapScreen() {
                     <FontAwesome name='bolt' size={16} color={colors.viridian} />
                     <Text style={{marginLeft:8, color: colors.textMuted}}>{selectedQuest.rewards?.xp || 0} XP</Text>
                   </View>
-                  <View style={{flexDirection:'row', alignItems:'center'}}>
-                    <FontAwesome name='trophy' size={16} color={colors.viridian} />
-                    <Text style={{marginLeft:8, color: colors.textMuted}}>{selectedQuest.rewards?.badge || 'None'}</Text>
                   </View>
+                            <View style={{flexDirection:'row', alignItems:'center'}}>
+                                                        { selectedQuest.rewards?.badge && BADGE_ICONS[selectedQuest.rewards.badge] ? (
+                                                          <FontAwesome6 name={normalizeIcon(BADGE_ICONS[selectedQuest.rewards.badge])} size={16} color={colors.viridian} solid />
+                                                        ) : (
+                                                          <FontAwesome name='trophy' size={16} color={colors.viridian} />
+                                                        ) }
+                                                        <Text style={{marginLeft:8, color: colors.textMuted}}>{selectedQuest.rewards?.badge || 'None'}</Text>
+                                                      </View>
                 </View>
-              </View>
               <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
                 {selectedQuest.user?.icon ? <Image source={{uri:selectedQuest.user.icon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
                 <Text>{selectedQuest.user?.name}</Text>
+                {(selectedQuest.guild || selectedQuest.guildName || selectedQuest.guildId) ? (
+                  <>
+                    <View style={{width:1, height:22, backgroundColor:'#e6ece6', marginHorizontal:10}} />
+                    {selectedQuest.guild?.icon ? (
+                      (typeof selectedQuest.guild.icon === 'string' && (selectedQuest.guild.icon.startsWith('http') || selectedQuest.guild.icon.startsWith('file:') || selectedQuest.guild.icon.startsWith('data:'))) ? (
+                        <Image source={{uri:selectedQuest.guild.icon}} style={styles.guildIconSmall} />
+                      ) : (
+                        <FontAwesome6 name={normalizeIcon(selectedQuest.guild.icon || 'map')} size={16} color={colors.viridian} solid style={{marginRight:8}} />
+                      )
+                    ) : null}
+                    <Text style={styles.guildName}>{selectedQuest.guild?.name || selectedQuest.guildName || selectedQuest.guildId}</Text>
+                  </>
+                ) : null}
               </View>
 
               <View style={styles.separator} />
@@ -288,7 +387,7 @@ export default function MapScreen() {
 
               {/* Composer Box */}
               <View style={styles.composerBox}>
-                <TextInput placeholder="Write a post... (max 50 words)" style={[styles.input,{flex:1, marginBottom:0, backgroundColor: colors.mintCream}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
+                <TextInput placeholder="Write a post... (max 50 words)" style={[styles.input,{flex:1, marginBottom:0, backgroundColor: '#fff'}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
                 <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:8}}>
                   <TouchableOpacity style={styles.buttonSmall} onPress={()=>pickImage(setNewPostImage)}>
                     <Text style={styles.buttonText}>Add Image</Text>

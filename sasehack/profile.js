@@ -11,17 +11,66 @@ import {
   FlatList,
   Modal
 } from "react-native";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, getDoc } from "firebase/firestore";
 import { db, auth } from "./firebase";
 import { signOut } from "firebase/auth";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from './styles';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, FontAwesome6 } from '@expo/vector-icons';
 
 const CLASS_ICONS = {
   Explorer: 'map',
   Baker: 'cutlery',
   Artist: 'paint-brush'
+};
+
+// Badge master list (reference from Questboard.js)
+const BADGES = [
+  { name: "Trailblazer", class: "Explorer", icon: 'person-hiking', description: "Visit a nature park or trail" },
+  { name: "Urban Explorer", class: "Explorer", icon: 'city', description: "Visit a popular city landmark" },
+
+  { name: "Sketcher", class: "Artist", icon: 'brush', description: "Create art using the 2D medium" },
+  { name: "Hands-on Artist", class: "Artist", icon: 'cube', description: "Create art using the 3D medium" },
+  { name: "Creative Spark", class: "Artist", icon: 'palette', description: "Attend an art class" },
+
+  { name: "Film Buff", class: "Performer", icon: 'film', description: "Go to a movie screening" },
+  { name: "Broadway Bound", class: "Performer", icon: 'masks-theater', description: "Perform or assist with a theater production" },
+  { name: "Theater Aficionado", class: "Performer", icon: 'ticket', description: "Attend a play, drama, or musical" },
+
+  { name: "Future Virtuoso", class: "Musician", icon: 'guitar', description: "Learn an instrument" },
+  { name: "Concert Connoisseur", class: "Musician", icon: 'music', description: "Attend a live concert"  },
+
+  { name: "Chef", class: "Foodie", icon: 'kitchen-set', description: "Create a signature dish" },
+  { name: "Baker", class: "Foodie", icon: 'cake-candles', description: "Bake something delicious" },
+  { name: "Taste Tester", class: "Foodie", icon: 'pizza-slice', description: "Visit a restaurant" },
+  { name: "Something Sweet", class: "Foodie", icon: 'mug-hot', description: "Visit a bakery or cafe" },
+
+  { name: "Time Traveler", class: "Historian", icon: 'archway', description: "Explore historical landmarks" },
+  { name: "Walking through Time", class: "Historian", icon: 'building-columns', description: "Visit a museum" },
+
+  { name: "Social Butterfly", class: "Connector", icon: 'gifts', description: "Attend social events" },
+  { name: "Community Enthusiast", class: "Connector", icon: 'calendar', description: "Participate in a local celebration of holiday event" }
+];
+
+const BADGE_ICONS = BADGES.reduce((m, b) => { m[b.name] = b.icon || null; return m; }, {});
+
+// Helper: compute tier ranges and percent to next tier
+const BADGE_THRESHOLDS = [5, 25, 50, 100];
+const computeBadgeProgress = (p = 0) => {
+  const progress = Number(p) || 0;
+  if (progress >= 100) return { tier: 5, percent: 100, prev: 100, next: 100 };
+  let prev = 0;
+  for (let i = 0; i < BADGE_THRESHOLDS.length; i++) {
+    const t = BADGE_THRESHOLDS[i];
+    if (progress < t) {
+      const range = t - prev;
+      const within = progress - prev;
+      const percent = Math.round((within / Math.max(range, 1)) * 100);
+      return { tier: i + 1, percent, prev, next: t };
+    }
+    prev = t;
+  }
+  return { tier: 4, percent: 100, prev: 50, next: 100 };
 };
 
 export default function Profile({ navigation }) {
@@ -211,8 +260,18 @@ const getCompletedQuestCountsByClass = () => {
   };
 
   const openDetail = (obj, type) => {
-    setDetailItem({ ...obj, __type: type });
-    setDetailModalVisible(true);
+    (async () => {
+      let enriched = { ...obj };
+      try {
+        const gid = obj.guild?.id || obj.guildId || obj.guild?.guildId;
+        if (!enriched.guild && gid) {
+          const gdoc = await getDoc(doc(db, 'Guilds', gid));
+          if (gdoc.exists()) enriched.guild = { id: gdoc.id, ...(gdoc.data() || {}) };
+        }
+      } catch (e) { /* ignore guild fetch errors */ }
+      setDetailItem({ ...enriched, __type: type });
+      setDetailModalVisible(true);
+    })();
   };
 
   // ------------------ RENDERERS ------------------
@@ -226,43 +285,31 @@ const getCompletedQuestCountsByClass = () => {
     const questImage = item.image || item.imageUrl || item.imageURL || item.cover || item.icon || item.questImage || null;
 
     return (
-      <TouchableOpacity activeOpacity={0.85} onPress={() => openDetail(item, 'quest')}>
-      <View style={[styles.questBadgeContainer, { width: windowWidth * 0.8 }]}>
-        {questImage ? (
-          <Image source={{ uri: questImage }} style={styles.questBadgeIcon} />
-        ) : (
-          <View style={[styles.questBadgeIcon, { backgroundColor: "#dfe6e9" }]} />
-        )}
-        <Text style={styles.questBadgeTitle}>{item.title}</Text>
-        <Text style={styles.questBadgeDesc}>{item.description}</Text>
-        {dateRangeText ? <Text style={styles.dateRange}>{dateRangeText}</Text> : null}
-      </View>
+      <TouchableOpacity activeOpacity={0.85} onPress={() => openDetail(item, 'quest')} style={styles.gridItemWrap}>
+        <View style={styles.questGridBox}>
+          {questImage ? (
+            <Image source={{ uri: questImage }} style={styles.questGridImage} />
+          ) : (
+            <View style={[styles.questGridImage, { backgroundColor: "#dfe6e9" }]} />
+          )}
+          <Text numberOfLines={1} ellipsizeMode='tail' style={styles.questGridTitle}>{item.title}</Text>
+          <Text numberOfLines={2} ellipsizeMode='tail' style={styles.questGridDesc}>{item.description}</Text>
+        </View>
       </TouchableOpacity>
     );
   };
 
   const renderPostBadge = ({ item }) => (
-    <TouchableOpacity activeOpacity={0.85} onPress={() => openDetail(item, 'post')}>
-    <View style={[styles.postCardContainer, { width: windowWidth * 0.9 }]}>
-      <Text style={styles.postedUnder}>
-        posted under <Text style={styles.questTitleLabel}>{item.questTitle}</Text>
-      </Text>
-
-      <View style={styles.userInfoRow}>
-        {item.userIcon ? (
-          <Image source={{ uri: item.userIcon }} style={styles.userIconLarge} />
+    <TouchableOpacity activeOpacity={0.85} onPress={() => openDetail(item, 'post')} style={styles.gridItemWrap}>
+      <View style={styles.postGridBox}>
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={styles.postGridImage} />
         ) : (
-          <View style={[styles.userIconLarge, { backgroundColor: "#dfe6e9" }]} />
+          <View style={[styles.postGridImage, { backgroundColor: '#dfe6e9' }]} />
         )}
-
-        <View style={styles.userTextColumn}>
-          <Text style={styles.userName}>{item.username || "Unknown User"}:</Text>
-          <Text style={styles.postDescription}>{item.description}</Text>
-        </View>
+        <Text numberOfLines={1} ellipsizeMode='tail' style={styles.postGridTitle}>{item.questTitle}</Text>
+        <Text numberOfLines={2} ellipsizeMode='tail' style={styles.postGridDesc}>{item.description}</Text>
       </View>
-
-      {item.image ? <Image source={{ uri: item.image }} style={styles.postImage} /> : null}
-    </View>
     </TouchableOpacity>
   );
 
@@ -274,12 +321,40 @@ const getCompletedQuestCountsByClass = () => {
   
 
   const renderBadge = ({ item }) => {
-      console.log("Badge item:", item);
+      // item has { id: key, title, progress, tier, description? }
+      const title = item.title || item.name || item.id || 'Unknown Badge';
+      const progressObj = computeBadgeProgress(item.progress);
+    const tier = Number(item.tier) || progressObj.tier || 1;
+    const tierCol = tierColor(tier);
+      const iconName = BADGE_ICONS[title] || item.icon || 'trophy';
+
+      // Prefer description from the user's badge object; fallback to master BADGES list
+      const master = BADGES.find(b => b.name === title || b.name === item.id || b.name === item.title);
+      const description = item.description || master?.description || '';
+
       return (
-        <View style={[styles.badgeContainer, { width: windowWidth * 0.8 }]}>
-          <Text style={styles.badgeTitle}>{item.title || "No title"}</Text>
-          <Text style={styles.badgeProgress}>Progress: {item.progress || "0"}</Text>
-          <Text style={styles.badgeTier}>Tier: {item.tier || "0"}</Text>
+        <View style={styles.badgeGridItem}>
+          <View style={styles.badgeBox}>
+            <View style={styles.badgeTopRow}>
+              <View style={[styles.badgeIconWrap, { backgroundColor: tierCol }]}>
+                <FontAwesome6 name={iconName} size={28} color={'#fff'} solid />
+              </View>
+              <View style={{flex:1, marginLeft:10}}>
+                <View style={{flexDirection:'row', alignItems:'center', justifyContent:'space-between'}}>
+                  <Text style={styles.badgeTitleSmall}>{title}</Text>
+                </View>
+                <Text style={[styles.badgeTierSmall, { color: tierCol }]}>Tier {item.tier || progressObj.tier}</Text>
+
+              </View>
+            </View>
+                <Text style={styles.badgeDescSmall}>{description}</Text>
+            <View style={styles.badgeProgressRow}>
+              <View style={styles.badgeProgressBg}>
+                <View style={[styles.badgeProgressFill, { width: `${progressObj.percent}%`, backgroundColor: tierCol }]} />
+              </View>
+              <Text style={styles.badgeProgressPct}>{progressObj.percent}%</Text>
+            </View>
+          </View>
         </View>
       );
 };
@@ -310,8 +385,11 @@ const getCompletedQuestCountsByClass = () => {
  
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.azureWeb }}>
-      <ScrollView>
-        <View style={styles.container}>
+      <FlatList
+        data={[]}
+        renderItem={null}
+        ListHeaderComponent={() => (
+          <View style={styles.container}>
           {user?.avatarUrl ? (
             <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
           ) : (
@@ -343,18 +421,18 @@ const getCompletedQuestCountsByClass = () => {
           </View>
 
         
-        <Text style = {{marginBottom: 20}}>
-        <FlatList
-          data={user?.badges ? Object.entries(user.badges).map(([key, value]) => ({ id: key, ...value })) : []}
-          renderItem={renderBadge}
-          keyExtractor={(item) => item.id}
-          pagingEnabled
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: windowWidth * 0.1, paddingBottom: 0 }}
-          style={{ height: 120}}
-        />
-        </Text>
+        <View style={{ width: '100%', marginTop: 18, marginBottom: 8 }}>
+          <FlatList
+            data={user?.badges ? Object.entries(user.badges).map(([key, value]) => ({ id: key, ...value })) : []}
+            renderItem={renderBadge}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: 8 }}
+            contentContainerStyle={{ paddingBottom: 12 }}
+            showsVerticalScrollIndicator={false}
+            style={{ width: '100%' }}
+          />
+        </View>
         
           {/* Toggle Tabs */}
           <View style={styles.toggleContainer}>
@@ -387,56 +465,99 @@ const getCompletedQuestCountsByClass = () => {
             ) : completedQuests.length === 0 ? (
               <Text style={{ textAlign: "center", marginVertical: 20 }}>No completed quests yet!</Text>
             ) : (
-              <View style={{ width: "100%", alignItems: "center", paddingBottom: 10 }}>
-                {completedQuests.map((quest) => (
-                  <View key={quest.id} style={{ marginBottom: 16, width: windowWidth * 0.8 }}>
-                    {renderQuestBadge({ item: quest })}
-                  </View>
-                ))}
-              </View>
+              <FlatList
+                data={completedQuests}
+                renderItem={({ item }) => renderQuestBadge({ item })}
+                keyExtractor={(item) => item.id}
+                numColumns={3}
+                columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: 8 }}
+                contentContainerStyle={{ paddingVertical: 12 }}
+              />
             )
           ) : activeTab === "posts" ? (
             userPosts.length === 0 ? (
               <Text style={{ textAlign: "center", marginVertical: 20 }}>No posts yet!</Text>
             ) : (
-              <View style={{ width: "100%", alignItems: "center", paddingBottom: 10 }}>
-                {userPosts.map((post, index) => (
-                  <View key={`${post.questId}-${index}`} style={{ marginBottom: 16, width: windowWidth * 0.8 }}>
-                    {renderPostBadge({ item: post })}
-                  </View>
-                ))}
-              </View>
+              <FlatList
+                data={userPosts}
+                renderItem={({ item }) => renderPostBadge({ item })}
+                keyExtractor={(item, index) => `${item.questId}-${index}`}
+                numColumns={3}
+                columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: 8 }}
+                contentContainerStyle={{ paddingVertical: 12 }}
+              />
             )
           ) : (
             <View style={{ width: "100%", alignItems: "center", paddingVertical: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>User Stats</Text>
-              <Text style={{ fontSize: 16 }}>Badges Earned: {user?.badges ? Object.keys(user.badges).length : 0}</Text>
-              <Text style={{ fontSize: 16 }}>Posts Made: {userPosts.length}</Text>
-              <Text style={{ fontSize: 16, marginTop: 10, fontWeight: "bold" }}>Completed Quests by Class:</Text>
-              <Text style={{ fontSize: 16 }}>Artist: {questCounts.artist}</Text>
-              <Text style={{ fontSize: 16 }}>Baker: {questCounts.baker}</Text>
-              <Text style={{ fontSize: 16 }}>Explorer: {questCounts.explorer}</Text>
-              <Text style={{ fontSize: 16 }}>Total Quests Completed: {completedQuests.length}</Text>
 
-              <Text style={{ fontSize: 16, marginTop: 12, fontWeight: 'bold' }}>Class Ranking</Text>
-              {classRanking.length > 0 ? (
-                classRanking.map((c, i) => (
-                  <Text key={c.name} style={{ fontSize: 15 }}>{i+1}. {c.name}: {c.count}</Text>
-                ))
-              ) : (
-                <Text style={{ fontSize: 15 }}>No class progress yet</Text>
-              )}
+              {/* Row: badges / quests / posts */}
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <FontAwesome6 name={'trophy'} size={28} color={colors.viridian} solid />
+                  <Text style={styles.statNumber}>{user?.badges ? Object.keys(user.badges).length : 0}</Text>
+                  <Text style={styles.statLabel}>Badges</Text>
+                </View>
 
-              <Text style={{ fontSize: 16, marginTop: 12, fontWeight: 'bold' }}>Badge Tiers</Text>
-              <Text style={{ fontSize: 15 }}>Tier 1 : {badgeTierCounts.t1}</Text>
-              <Text style={{ fontSize: 15 }}>Tier 2 : {badgeTierCounts.t2}</Text>
-              <Text style={{ fontSize: 15 }}>Tier 3 : {badgeTierCounts.t3}</Text>
+                <View style={styles.statItem}>
+                  <FontAwesome name={'check-circle'} size={28} color={colors.cambridgeBlue} />
+                  <Text style={styles.statNumber}>{completedQuests.length}</Text>
+                  <Text style={styles.statLabel}>Quests</Text>
+                </View>
+
+                <View style={styles.statItem}>
+                  <FontAwesome name={'pencil'} size={28} color={colors.mintGreen} />
+                  <Text style={styles.statNumber}>{userPosts.length}</Text>
+                  <Text style={styles.statLabel}>Posts</Text>
+                </View>
+              </View>
+
+              {/* Row: badge tiers (5 tiers). Compute counts for tiers 1..5 */}
+              <View style={{ width: '100%', paddingHorizontal: 18, marginTop: 14 }}>
+                <View style={styles.tierRow}>
+                  {[1,2,3,4,5].map(t => {
+                    // compute count for this exact tier
+                    let count = 0;
+                    const badges = user?.badges || {};
+                    const entries = Array.isArray(badges) ? badges : Object.values(badges || {});
+                    entries.forEach(b => { if (Number(b?.tier) === t) count++; });
+                    return (
+                      <View key={`tier-${t}`} style={styles.tierItem}>
+                        <FontAwesome6 name={'medal'} size={20} color={tierColor(t)} solid />
+                        <Text style={styles.tierNumber}>{count}</Text>
+                        <Text style={styles.tierLabel}>T{t}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Class ranking: show icon + number + 'quest(s) completed' */}
+              <View style={{ width: '100%', paddingHorizontal: 18, marginTop: 16 }}>
+                {classRanking.length > 0 ? (
+                  classRanking.map((c, i) => (
+                    <View key={c.name} style={styles.classRankRow}>
+                      <View style={styles.classIconWrap}>
+                        <FontAwesome name={CLASS_ICONS[c.name] || 'star'} size={18} color={'#fff'} />
+                      </View>
+                      <Text style={styles.classRankText}>{c.name}</Text>
+                      <Text style={styles.classRankCount}>{c.count} quest(s) completed</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={{ fontSize: 15 }}>No class progress yet</Text>
+                )}
+              </View>
+
             </View>
           )}
-        </View>
-        {/* Detail Modal for quest or post */}
-        <Modal visible={detailModalVisible} animationType="slide" onRequestClose={()=>setDetailModalVisible(false)}>
-          <ScrollView style={{flex:1, padding:12, backgroundColor:'#f6fff8'}}>
+          </View>
+        )}
+        keyExtractor={() => 'header'}
+        showsVerticalScrollIndicator={false}
+      />
+      {/* Detail Modal for quest or post */}
+      <Modal visible={detailModalVisible} animationType="slide" onRequestClose={()=>setDetailModalVisible(false)}>
+        <ScrollView style={{flex:1, padding:12, backgroundColor:'#f6fff8'}}>
             <TouchableOpacity onPress={()=>setDetailModalVisible(false)} style={{alignSelf:'flex-end', padding:8}}>
               <Text style={{fontWeight:'700'}}>Close</Text>
             </TouchableOpacity>
@@ -479,6 +600,20 @@ const getCompletedQuestCountsByClass = () => {
                     <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
                       {detailItem.user?.icon ? <Image source={{uri:detailItem.user.icon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
                       <Text>{detailItem.user?.name}</Text>
+                      {(detailItem.guild || detailItem.guildName || detailItem.guildId) ? (
+                                  <>
+                                    <View style={{width:1, height:24, backgroundColor:'#e6ece6', marginHorizontal:12}} />
+                                    { /* guild object preferred, fallbacks to guildName/guildId */ }
+                                    {detailItem.guild.icon ? (
+                          (typeof detailItem.guild.icon === 'string' && (detailItem.guild.icon.startsWith('http') || detailItem.guild.icon.startsWith('file:') || detailItem.guild.icon.startsWith('data:'))) ? (
+                            <Image source={{uri:detailItem.guild.icon}} style={{width:28,height:28,borderRadius:6,marginRight:8}} />
+                          ) : (
+                            <FontAwesome6 name={detailItem.guild.icon || 'map'} size={18} color={colors.viridian} solid style={{marginRight:8}} />
+                          )
+                        ) : null}
+                                    <Text style={styles.guildName}>{detailItem.guild?.name || detailItem.guildName || detailItem.guildId}</Text>
+                                  </>
+                                ) : null}
                     </View>
                   </>
                 ) : (
@@ -527,14 +662,25 @@ const getCompletedQuestCountsByClass = () => {
                       {detailItem.user?.icon ? <Image source={{uri:detailItem.user.icon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
                       <Text>{detailItem.user?.name}</Text>
                     </View>
+                    {detailItem.guild ? (
+                      <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
+                        {detailItem.guild.icon ? (
+                          (typeof detailItem.guild.icon === 'string' && (detailItem.guild.icon.startsWith('http') || detailItem.guild.icon.startsWith('file:') || detailItem.guild.icon.startsWith('data:'))) ? (
+                            <Image source={{uri:detailItem.guild.icon}} style={{width:28,height:28,borderRadius:6,marginRight:8}} />
+                          ) : (
+                            <FontAwesome6 name={detailItem.guild.icon || 'map'} size={18} color={colors.viridian} solid style={{marginRight:8}} />
+                          )
+                        ) : null}
+                        <Text style={styles.guildName}>{detailItem.guild.name || detailItem.guildName || detailItem.guildId}</Text>
+                      </View>
+                    ) : null}
                   </>
                   
                 )}
               </View>
             ) : null}
           </ScrollView>
-        </Modal>
-      </ScrollView>
+  </Modal>
     </SafeAreaView>
   );
 }
@@ -591,6 +737,19 @@ const styles = StyleSheet.create({
   badgeDesc: { fontSize: 12, textAlign: "center", marginVertical: 4 },
   badgeProgress: { fontSize: 12 },
   badgeTier: { fontSize: 12, fontStyle: "italic", paddingBottom: 20 },
+  /* New grid badge styles */
+  badgesGrid: { width: '100%', paddingHorizontal: 16 },
+  badgeGridItem: { width: '50%', padding: 8 },
+  badgeBox: { backgroundColor: '#fff', borderRadius: 12, padding: 12, height: 140, justifyContent: 'space-between', shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width:0, height:1 }, shadowRadius:6, elevation:2 },
+  badgeTopRow: { flexDirection: 'row', alignItems: 'center' },
+  badgeIconWrap: { width:54, height:54, borderRadius:10, backgroundColor:'#f1f6f4', alignItems:'center', justifyContent:'center' },
+  badgeTitleSmall: { fontSize:14, fontWeight:'700', color:'#234' },
+  badgeDescSmall: { fontSize:12, color:'#556', marginTop:4 },
+  badgeTierSmall: { fontSize:12, fontWeight:'700', color:'#6b9080' },
+  badgeProgressRow: { flexDirection:'row', alignItems:'center', marginTop:8 },
+  badgeProgressBg: { flex:1, height:10, backgroundColor:'#eaf4f4', borderRadius:6, overflow:'hidden' },
+  badgeProgressFill: { height:10, backgroundColor:'#6b9080' },
+  badgeProgressPct: { marginLeft:8, fontSize:12, color:'#456', width:40, textAlign:'right' },
   levelTag: { backgroundColor: '#6b9080', paddingHorizontal:8, paddingVertical:4, borderRadius:8, marginLeft:8},
   levelText: { color:'#fff', fontWeight:'700' },
   classTag: { backgroundColor:'#a4c3b2', paddingHorizontal:8, paddingVertical:4, borderRadius:8, marginLeft:8 },
@@ -599,6 +758,44 @@ const styles = StyleSheet.create({
   xpBarBg: { height:12, width:180, backgroundColor:'#e6f0ec', borderRadius:8, overflow:'hidden', marginRight:8 },
   xpBarFill: { height:12, backgroundColor:'#6b9080' },
   xpNumber: { fontSize:12, color:'#2d3436', fontWeight:'700' },
+  /* Quest/Post grid styles */
+  gridItemWrap: { width: (Dimensions.get('window').width - 48) / 3 },
+  questGridBox: { backgroundColor:'#fff', borderRadius:10, padding:8, alignItems:'center', justifyContent:'flex-start', height:140, marginBottom:12, shadowColor:'#000', shadowOpacity:0.04, shadowOffset:{width:0,height:1}, shadowRadius:4, elevation:2 },
+  questGridImage: { width:64, height:64, borderRadius:8, marginBottom:8 },
+  questGridTitle: { fontSize:12, fontWeight:'700', textAlign:'center' },
+  questGridDesc: { fontSize:11, color:'#556', textAlign:'center' },
+
+  postGridBox: { backgroundColor:'#fff', borderRadius:10, padding:8, alignItems:'center', justifyContent:'flex-start', height:140, marginBottom:12, shadowColor:'#000', shadowOpacity:0.04, shadowOffset:{width:0,height:1}, shadowRadius:4, elevation:2 },
+  postGridImage: { width:64, height:64, borderRadius:8, marginBottom:8 },
+  postGridTitle: { fontSize:12, fontWeight:'700', textAlign:'center' },
+  postGridDesc: { fontSize:11, color:'#556', textAlign:'center' },
+  guildName: { color:'#456', fontSize:13, fontWeight:'600', marginLeft:6 },
+  /* tweak grid spacing */
+  gridItemWrap: { width: (Dimensions.get('window').width - 48) / 3, marginHorizontal:4 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', paddingHorizontal: 20 },
+  statItem: { alignItems: 'center' },
+  statNumber: { fontSize: 18, fontWeight: '700', marginTop: 6 },
+  statLabel: { fontSize: 12, color: '#556' },
+  tierRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  tierItem: { alignItems: 'center', width: (Dimensions.get('window').width - 80) / 5, paddingVertical: 6 },
+  tierNumber: { fontSize: 14, fontWeight: '700', marginTop: 6 },
+  tierLabel: { fontSize: 11, color: '#556' },
+  classRankRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 10, marginBottom: 8 },
+  classIconWrap: { width:36, height:36, borderRadius:18, backgroundColor: colors.viridian, alignItems:'center', justifyContent:'center', marginRight:12 },
+  classRankText: { fontSize: 15, fontWeight: '700', flex:1 },
+  classRankCount: { fontSize: 13, color: '#556' },
 });
+
+// helper to pick colors for tiers
+function tierColor(tier) {
+  switch (Number(tier)) {
+    case 1: return '#B0E0E6';
+    case 2: return '#87CEFA';
+    case 3: return '#6B9080';
+    case 4: return '#4682B4';
+    case 5: return '#DAA520';
+    default: return '#B0E0E6';
+  }
+}
 
 

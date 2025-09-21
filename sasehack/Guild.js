@@ -4,7 +4,8 @@ import styles, { colors } from './styles';
 import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, getDoc, arrayRemove } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import * as ImagePicker from 'expo-image-picker';
-import { FontAwesome, FontAwesome5 } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import { FontAwesome, FontAwesome6 } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import googleConfig from './googleConfig';
 
@@ -17,7 +18,7 @@ export default function Guilds() {
   const [creating, setCreating] = useState(false);
   const [selectedGuild, setSelectedGuild] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [newGuild, setNewGuild] = useState({ name:'', description:'', icon:'', class:'Explorer', location:'' });
+  const [newGuild, setNewGuild] = useState({ name:'', description:'', icon:'', class:'', location:'' });
   const [newGuildIcon, setNewGuildIcon] = useState(null);
   const [quests, setQuests] = useState([]);
 
@@ -60,7 +61,7 @@ export default function Guilds() {
     { name: 'Stadium Regular', class: 'Connector', icon: 'football' },
   ];
 
-  // Icon aliasing to handle FontAwesome name differences
+  // Icon aliasing to handle FontAwesome6 name differences
   const ICON_ALIASES = {
     'cutlery': 'utensils',
     'map': 'map',
@@ -111,10 +112,13 @@ export default function Guilds() {
   const [viewMode, setViewMode] = useState('discover'); // 'discover' or 'my'
   const [selectedClasses, setSelectedClasses] = useState([]); // multi-select
   const [classFilterModal, setClassFilterModal] = useState(false);
+  const [locationFilterModal, setLocationFilterModal] = useState(false);
   const [filteredBadges, setFilteredBadges] = useState([]);
+  const [locationFilter, setLocationFilter] = useState({ coords: null, radiusKm: 5 });
   const [placeQuery, setPlaceQuery] = useState('');
   const [predictions, setPredictions] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null); // {name, coords}
+  const [nameQuery, setNameQuery] = useState(''); // search by guild name
 
   // track current user's guild ids for quick checks
   const [currentUserGuilds, setCurrentUserGuilds] = useState([]);
@@ -154,6 +158,108 @@ export default function Guilds() {
     } catch(e){ console.warn('fetchQuests', e); }
   };
 
+  const handleCompleteQuest = async (quest) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not signed in');
+
+      const userRef = doc(db, 'Users', user.uid);
+      const udoc = await getDoc(userRef);
+      const userData = udoc.exists() ? udoc.data() : {};
+
+      const currentXp = Array.isArray(userData.xp) ? userData.xp.reduce((a,b)=>a+(Number(b)||0),0) : (Number(userData.xp) || 0);
+      const rewardXp = quest?.rewards?.xp ? Number(quest.rewards.xp) : 0;
+      const newXpTotal = currentXp + rewardXp;
+      const newLevel = Math.floor(newXpTotal / 100);
+
+      const updates = {};
+      updates.xp = newXpTotal;
+      updates.level = newLevel;
+
+      if (quest.class) {
+        const currentClassMap = (userData.class && typeof userData.class === 'object' && !Array.isArray(userData.class)) ? { ...userData.class } : {};
+        const cls = quest.class;
+        currentClassMap[cls] = (Number(currentClassMap[cls]) || 0) + 1;
+        updates.class = currentClassMap;
+      }
+
+      if (quest.rewards && quest.rewards.badge) {
+        const badgeTitle = quest.rewards.badge;
+        const badgesField = userData.badges || {};
+        let badgeObj = null;
+        if (Array.isArray(badgesField)) {
+          const found = badgesField.find(b => b.title === badgeTitle);
+          if (found) badgeObj = { ...found };
+        } else if (badgesField && typeof badgesField === 'object') {
+          if (badgesField[badgeTitle]) badgeObj = { ...(badgesField[badgeTitle]) };
+          else if (badgesField.title === badgeTitle) badgeObj = { ...badgesField };
+        }
+        if (!badgeObj) badgeObj = { title: badgeTitle, progress: 0, tier: 0 };
+        badgeObj.progress = (Number(badgeObj.progress) || 0) + 1;
+        const p = badgeObj.progress;
+        let tier = 1;
+        if (p >= 100) tier = 5;
+        else if (p >= 50) tier = 4;
+        else if (p >= 25) tier = 3;
+        else if (p >= 5) tier = 2;
+        badgeObj.tier = tier;
+        const newBadgesMap = (badgesField && typeof badgesField === 'object' && !Array.isArray(badgesField)) ? { ...badgesField } : {};
+        newBadgesMap[badgeTitle] = badgeObj;
+        updates.badges = newBadgesMap;
+      }
+
+      const existingQuests = userData.quests || [];
+      const questIndex = existingQuests.findIndex(q => q.questID === quest.id);
+      if (questIndex === -1) {
+        existingQuests.push({ questID: quest.id, completed: true });
+      } else {
+        existingQuests[questIndex].completed = true;
+      }
+      updates.quests = existingQuests;
+
+      await updateDoc(userRef, updates);
+      Alert.alert('Quest Completed!', `+${rewardXp} XP — Level ${newLevel}`);
+      setQuestDetailModal(false);
+      fetchQuests();
+    } catch (e) { Alert.alert('Error', e.message); }
+  };
+
+  const handleAddPost = async (quest) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not signed in');
+
+      let imageUrl = null;
+      if (newPostImage) imageUrl = newPostImage;
+
+      let userIcon = '';
+      let username = user.displayName || '';
+      try {
+        const udoc = await getDoc(doc(db, 'Users', user.uid));
+        if (udoc.exists()) userIcon = udoc.data().avatarUrl || userIcon;
+        if (udoc.exists()) username = udoc.data().displayName || username;
+      } catch (e) { /* ignore */ }
+
+      const questRef = doc(db, 'Quests', quest.id);
+      await updateDoc(questRef, { posts: arrayUnion({ username, userIcon, description: newPostDesc, image: imageUrl, userId: user.uid }) });
+
+      const userRef = doc(db, 'Users', user.uid);
+      const udoc = await getDoc(userRef);
+      const userData = udoc.exists() ? udoc.data() : {};
+      const existingQuests = userData.quests || [];
+      const questIndex = existingQuests.findIndex(q => q.questID === quest.id);
+      if (questIndex === -1) {
+        existingQuests.push({ questID: quest.id, completed: false });
+        await updateDoc(userRef, { quests: existingQuests });
+      }
+
+      setNewPostDesc(''); setNewPostImage(null);
+      const qdoc = await getDoc(questRef);
+      if (qdoc.exists()) setViewingQuest({ id: qdoc.id, ...qdoc.data() });
+      fetchQuests();
+    } catch (e) { Alert.alert('Error adding post', e.message); }
+  };
+
   useEffect(()=>{ fetchGuilds(); fetchQuests(); }, []);
   useEffect(()=>{ fetchUserGuilds(); }, []);
 
@@ -189,6 +295,11 @@ export default function Guilds() {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('You must be signed in to join');
+      // prevent double-joining
+      if ((g.members && Array.isArray(g.members) && g.members.includes(user.uid)) || (currentUserGuilds && currentUserGuilds.includes(g.id))) {
+        Alert.alert('Joined', `You are already a member of ${g.name}`);
+        return;
+      }
   const ref = doc(db, 'Guilds', g.id);
   await updateDoc(ref, { members: arrayUnion(user.uid) });
   // add guild id to user's guilds array
@@ -256,7 +367,7 @@ export default function Guilds() {
         <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
           {ended ? <Text style={styles.endedTag}>ENDED</Text> : null}
           <View style={{width:36,height:36,borderRadius:18,backgroundColor:colors.viridian,alignItems:'center',justifyContent:'center',marginRight:8}}>
-            <FontAwesome5 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={16} color={colors.mintCream} solid />
+            <FontAwesome6 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={16} color={colors.mintCream} solid />
           </View>
           <Text style={styles.title}>{item.title}</Text>
         </View>
@@ -267,24 +378,25 @@ export default function Guilds() {
 
         <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:8, alignItems:'center'}}>
           <View style={{flexDirection:'row', alignItems:'center'}}>
-            <FontAwesome name='bolt' size={14} color={colors.viridian} />
+            <FontAwesome6 name='bolt' size={14} color={colors.viridian} />
             <Text style={[styles.metaText,{marginLeft:8}]}>{item.rewards?.xp ?? 0} XP</Text>
           </View>
           <View style={{flexDirection:'row', alignItems:'center'}}>
-            { item.rewards?.badge && BADGE_ICONS[item.rewards.badge] ? (
-              <FontAwesome5 name={normalizeIcon(BADGE_ICONS[item.rewards.badge])} size={16} color={colors.viridian} solid />
-            ) : (
-              <FontAwesome name='trophy' size={16} color={colors.viridian} />
-            ) }
-          </View>
+                                                                  { item.rewards?.badge && BADGE_ICONS[item.rewards.badge] ? (
+                                                                    <FontAwesome6 name={normalizeIcon(BADGE_ICONS[item.rewards.badge])} size={16} color={colors.viridian} solid />
+                                                                  ) : (
+                                                                    <FontAwesome name='trophy' size={16} color={colors.viridian} />
+                                                                  ) }
+                                                                  <Text style={{marginLeft:8, color: colors.textMuted}}>{item.rewards?.badge || 'None'}</Text>
+                                                                </View>
         </View>
 
         {item.location ? <Text style={styles.metaText}>Location: {item.location}{item.placeCoords ? ` (${item.placeCoords.lat.toFixed(3)}, ${item.placeCoords.lng.toFixed(3)})` : ''}</Text> : null}
 
         <View style={{flexDirection:'row', alignItems:'center', marginTop:10}}>
-          {item.user?.icon ? <Image source={{uri:item.user.icon}} style={styles.avatarSmall} /> : null}
-          <Text style={styles.metaText}>{item.user?.name}</Text>
-        </View>
+                  {item.user?.icon ? <Image source={{uri:item.user.icon}} style={styles.avatarSmall} /> : null}
+                  <Text style={styles.metaText}>{item.user?.name || '—'}</Text>
+                </View>
       </View>
     );
   };
@@ -296,11 +408,20 @@ export default function Guilds() {
       // ensure user is a member of the guild
       const isMember = (g.members && Array.isArray(g.members) && g.members.includes(user.uid)) || currentUserGuilds.includes(g.id);
       if (!isMember) throw new Error('You must be a member of the guild to create quests for it.');
+      // Try to get user's avatar/displayName from Users doc (same behavior as Questboard)
+      let userIcon = '';
+      let displayName = user.displayName || '';
+      try {
+        const udoc = await getDoc(doc(db, 'Users', user.uid));
+        if (udoc.exists()) userIcon = udoc.data().avatarUrl || userIcon;
+        if (udoc.exists()) displayName = udoc.data().displayName || displayName;
+      } catch (e) { /* ignore */ }
+
       const data = {
         ...questData,
         class: g.class,
         guildId: g.id,
-        user: { name: user.displayName || '', icon: '' },
+        user: { name: displayName || '', icon: userIcon || '' },
         posts: [],
         rewards: { xp: (questData.difficulty||1)*10, badge: questData.badge || '' },
         location: questData.location || null
@@ -315,27 +436,56 @@ export default function Guilds() {
   const fetchPredictions = async (query) => {
     if (!query) { setPredictions([]); return; }
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleConfig.GOOGLE_API_KEY}&types=(cities)`;
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleConfig.GOOGLE_API_KEY}&types=geocode`;
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.predictions) setPredictions(data.predictions);
     } catch (e) { console.warn('Places autocomplete error', e); }
   };
 
+  // Fetch place details (lat/lng) for a place_id
   const fetchPlaceDetails = async (placeId) => {
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${googleConfig.GOOGLE_API_KEY}&fields=geometry,name,formatted_address`;
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${googleConfig.GOOGLE_API_KEY}&fields=geometry,name,formatted_address,address_component,address_components`;
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.result && data.result.geometry && data.result.geometry.location) {
+        const result = data.result || {};
+        const components = result.address_components || [];
+        // Try to find a suitable city/locality value
+        const findComp = (types) => {
+          for (const t of types) {
+            const found = components.find(c => Array.isArray(c.types) && c.types.includes(t));
+            if (found) return found.long_name;
+          }
+          return null;
+        };
+        const city = findComp(['locality', 'postal_town', 'administrative_area_level_2', 'administrative_area_level_1']);
         return {
-          name: data.result.name || data.result.formatted_address || '',
-          address: data.result.formatted_address || '',
-          coords: { lat: data.result.geometry.location.lat, lng: data.result.geometry.location.lng }
+          name: result.name || result.formatted_address || '',
+          address: result.formatted_address || '',
+          city: city,
+          coords: { lat: result.geometry.location.lat, lng: result.geometry.location.lng }
         };
       }
     } catch (e) { console.warn('Place details error', e); }
     return null;
+  };
+
+  // Haversine distance (km)
+  const haversineKm = (a, b) => {
+    if (!a || !b) return Infinity;
+    const toRad = (v) => (v * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(b.lat - a.lat);
+    const dLon = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const sinDLat = Math.sin(dLat / 2);
+    const sinDLon = Math.sin(dLon / 2);
+    const aHarv = sinDLat * sinDLat + sinDLon * sinDLon * Math.cos(lat1) * Math.cos(lat2);
+    const c = 2 * Math.atan2(Math.sqrt(aHarv), Math.sqrt(1 - aHarv));
+    return R * c;
   };
 
   const formatDate = (iso) => iso ? new Date(iso).toLocaleDateString() : "";
@@ -344,6 +494,7 @@ export default function Guilds() {
   const [guildQuest, setGuildQuest] = useState({ title:'', description:'', difficulty:0, badge:'', image:null, location:'', placeCoords: null, startDate: null, endDate: null });
   const [questDetailModal, setQuestDetailModal] = useState(false);
   const [viewingQuest, setViewingQuest] = useState(null);
+  const [viewingQuestGuild, setViewingQuestGuild] = useState(null);
   const [newPostDesc, setNewPostDesc] = useState('');
   const [newPostImage, setNewPostImage] = useState(null);
   const [showStartPicker, setShowStartPicker] = useState(false);
@@ -394,34 +545,67 @@ export default function Guilds() {
         </TouchableOpacity>
       </View>
 
-      {/* Filters: class + location */}
-      <View style={styles.filterRow}>
-        <View style={{flex:1, marginRight:6}}>
-          <Text style={{fontWeight:'700', color: colors.textDark}}>Class</Text>
-          <TouchableOpacity style={{padding:10, marginTop:6, borderRadius:10, borderWidth:1, borderColor:colors.cambridgeBlue, backgroundColor: colors.mintCream}} onPress={()=>setClassFilterModal(true)}>
-            <Text style={{color: colors.textDark}}>{selectedClasses.length > 0 ? selectedClasses.join(', ') : 'All'}</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Top filter bar (Class + Location) */}
+      <View style={styles.filterBar}>
+        <TouchableOpacity style={[styles.filterButton, selectedClasses.length>0 && styles.filterButtonActive]} onPress={()=>setClassFilterModal(true)}>
+          <Text style={[styles.filterText, selectedClasses.length>0 && styles.filterTextActive]}>Class</Text>
+        </TouchableOpacity>
 
-        <View style={{flex:1}}>
-          <Text style={{fontWeight:'700', color: colors.textDark}}>Location</Text>
-          <TextInput placeholder='City' value={placeQuery} onChangeText={t=>{ setPlaceQuery(t); fetchPredictions(t); }} onBlur={()=>setPredictions([])} style={styles.input} />
-          {predictions.length>0 && (
-            <View style={{backgroundColor:colors.mintCream, borderRadius:8, padding:6}}>
-              {predictions.map(p => (
-                <TouchableOpacity key={p.place_id} style={{padding:6}} onPress={async ()=>{
-                  const d = await fetchPlaceDetails(p.place_id);
-                  if (d) {
-                    setSelectedLocation(d);
-                    setPlaceQuery(d.name || d.address || '');
-                    setPredictions([]);
-                  }
-                }}>
-                  <Text style={{color: colors.textDark}}>{p.description}</Text>
-                </TouchableOpacity>
-              ))}
+        <TouchableOpacity style={[styles.filterButton, selectedLocation && styles.filterButtonActive]} onPress={()=>setLocationFilterModal(true)}>
+          <Text style={[styles.filterText, selectedLocation && styles.filterTextActive]}>Location</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Location Filter Modal */}
+      <Modal visible={locationFilterModal} animationType="slide" transparent={true}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.mintCream }] }>
+            <Text style={styles.sheetTitle}>Filter by Location</Text>
+            <TouchableOpacity style={[styles.buttonPrimary,{marginTop:6}]} onPress={async ()=>{ try { const { status } = await Location.requestForegroundPermissionsAsync(); if (status !== 'granted') { Alert.alert('Permission denied', 'Location permission is required to use this filter.'); return; } const pos = await Location.getCurrentPositionAsync({}); const c = { lat: pos.coords.latitude, lng: pos.coords.longitude }; setLocationFilter(prev=> ({...prev, coords: c})); setSelectedLocation({ name: 'My location', coords: c }); } catch (err) { console.warn('expo-location error', err); Alert.alert('Location error', err.message || 'Unable to get location'); } }}>
+              <Text style={styles.buttonText}>Use My Location</Text>
+            </TouchableOpacity>
+
+            <Text style={{marginTop:10}}>Radius (km)</Text>
+            <TextInput keyboardType='numeric' value={String(locationFilter.radiusKm)} onChangeText={(t)=>{ const v = Number(t) || 0; setLocationFilter(prev=> ({...prev, radiusKm: v})); }} style={[styles.input, {backgroundColor: colors.mintCream}]} />
+            {predictions.length > 0 && (
+              <View style={{backgroundColor:colors.mintCream, borderRadius:8, marginBottom:6}}>
+                {predictions.map(p => (
+                  <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{
+                    const details = await fetchPlaceDetails(p.place_id);
+                    if (details) {
+                      setSelectedLocation(details);
+                      setPlaceQuery(details.city || details.name || details.address);
+                      setPredictions([]);
+                    }
+                  }}>
+                    <Text>{p.description}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
+              <TouchableOpacity style={[styles.buttonTertiary,{flex:1, marginRight:6, backgroundColor: colors.cambridgeBlue}]} onPress={()=>{ setSelectedLocation(null); setPlaceQuery(''); setLocationFilter({coords:null, radiusKm:5}); setLocationFilterModal(false); }}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.buttonPrimary,{flex:1, marginLeft:6}]} onPress={()=>{ setLocationFilter(prev=> ({...prev, /* coords already set by selection */})); setLocationFilterModal(false); }}>
+                <Text style={styles.buttonText}>Apply</Text>
+              </TouchableOpacity>
             </View>
-          )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Name search filter */}
+      <View style={{marginTop:10, marginBottom:6}}>
+        <Text style={{fontWeight:'700', color: colors.textDark}}>Search</Text>
+        <View style={{flexDirection:'row', alignItems:'center', marginTop:6}}>
+          <TextInput placeholder='Search guilds by name' value={nameQuery} onChangeText={t=>setNameQuery(t)} style={[styles.input, {flex:1, marginRight:8}]} />
+          {nameQuery ? (
+            <TouchableOpacity style={[styles.buttonSmall, {backgroundColor: colors.cambridgeBlue}]} onPress={()=>setNameQuery('')}>
+              <Text style={styles.buttonText}>Clear</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -430,8 +614,16 @@ export default function Guilds() {
         if (viewMode==='my' && !(currentUserGuilds.includes(g.id) || (g.members && g.members.includes(auth.currentUser?.uid)))) return false;
         // class filter (multi-select)
         if (selectedClasses.length > 0 && !selectedClasses.includes(g.class)) return false;
-        // location filter (simple substring match)
-        if (selectedLocation && g.location) {
+        // name search filter
+        if (nameQuery && g.name && !g.name.toLowerCase().includes(nameQuery.toLowerCase())) return false;
+        // location filter: prefer radius-based when locationFilter.coords is set
+        if (locationFilter && locationFilter.coords) {
+          // guilds may have placeCoords stored, or we fall back to no match
+          const gcoords = g.placeCoords || (g.placeCoords && g.placeCoords.lat ? g.placeCoords : null);
+          if (!gcoords) return false;
+          const dist = haversineKm(locationFilter.coords, { lat: gcoords.lat, lng: gcoords.lng });
+          if (dist > (locationFilter.radiusKm || 0)) return false;
+        } else if (selectedLocation && g.location) {
           if (!g.location.toLowerCase().includes((selectedLocation.name||selectedLocation.address||'').toLowerCase().split(',')[0])) return false;
         }
         return true;
@@ -440,15 +632,23 @@ export default function Guilds() {
           {item.icon ? <Image source={{uri:item.icon}} style={{width:64,height:64,borderRadius:12,marginRight:12}} /> : <View style={{width:64,height:64,borderRadius:12,backgroundColor:colors.cambridgeBlue,marginRight:12,alignItems:'center',justifyContent:'center'}}><Text style={{color:'#fff',fontWeight:'700'}}>G</Text></View>}
           <View style={{flex:1}}>
             <View style={{flexDirection:'row', alignItems:'center'}}>
-              <FontAwesome5 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={18} color={colors.textDark} solid style={{marginRight:8}} />
+              <FontAwesome6 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={18} color={colors.textDark} solid style={{marginRight:8}} />
               <Text style={{fontWeight:'800', color: colors.textDark}}>{item.name}</Text>
             </View>
             <Text style={{color: colors.textMuted}} numberOfLines={2}>{item.description}</Text>
             <Text style={{marginTop:6, color: colors.textMuted}}>{plural((item.members||[]).length || item.membersCount || 0, 'member')}{item.location ? ` • ${item.location}` : ''}</Text>
           </View>
-          <TouchableOpacity style={[styles.buttonSmall,{minWidth:80, backgroundColor: colors.viridian}]} onPress={()=>handleJoinGuild(item)}>
-            <Text style={styles.buttonText}>Join</Text>
-          </TouchableOpacity>
+          {
+            ((item.members && Array.isArray(item.members) && item.members.includes(auth.currentUser?.uid)) || currentUserGuilds.includes(item.id)) ? (
+              <TouchableOpacity style={[styles.buttonSmall,{minWidth:80, backgroundColor: '#9AC6B7'}]} disabled={true}>
+                <Text style={[styles.buttonText,{opacity:0.9}]}>Joined</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={[styles.buttonSmall,{minWidth:80, backgroundColor: colors.viridian}]} onPress={()=>handleJoinGuild(item)}>
+                <Text style={styles.buttonText}>Join</Text>
+              </TouchableOpacity>
+            )
+          }
         </TouchableOpacity>
       )} />
 
@@ -457,34 +657,23 @@ export default function Guilds() {
         <ScrollView style={styles.modalScroll}>
           <TextInput placeholder='Guild name' style={styles.input} value={newGuild.name} onChangeText={t=>setNewGuild(prev=>({...prev, name:t}))} />
           <TextInput placeholder='Description' style={[styles.input,{height:100}]} value={newGuild.description} onChangeText={t=>setNewGuild(prev=>({...prev, description:t}))} multiline />
-          <TextInput placeholder='Location (city)' style={styles.input} value={placeQuery || newGuild.location} onChangeText={t=>{
-            setPlaceQuery(t);
-            setNewGuild(prev=>({...prev, location: ''}));
-            fetchPredictions(t);
-          }} onBlur={()=>setPredictions([])} />
+          <TextInput placeholder="Location (City)" style={styles.input} value={placeQuery || newGuild.location} onChangeText={(text)=>{ setPlaceQuery(text);setNewGuild(prev=>({...prev, location: ''})); fetchPredictions(text); }} />
 
-          {predictions.length > 0 && (
-            <View style={{backgroundColor:colors.mintCream, borderRadius:8, marginBottom:6}}>
-              {predictions.map(p => (
-                <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{
-                  const details = await fetchPlaceDetails(p.place_id);
-                  if (details) {
-                    setNewGuild(prev=> ({...prev, location: details.name || details.address, placeCoords: details.coords }));
-                    setPlaceQuery(details.name || details.address);
-                    setPredictions([]);
-                  }
-                }}>
-                  <Text>{p.description}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+                                {predictions.length > 0 && (
+                                  <View style={{borderRadius:8, marginBottom:6}}>
+                                    {predictions.map(p => (
+                                      <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { setNewGuild(prev=> ({...prev, location: details.city || details.name || details.address, placeCoords: details.coords })); setPlaceQuery(details.city || details.name || details.address); setPredictions([]); } }}>
+                                        <Text>{p.description}</Text>
+                                      </TouchableOpacity>
+                                    ))}
+                                  </View>
+                                )}
 
           <Text style={{fontWeight:'bold', marginTop:6}}>Class</Text>
           <View style={{flexDirection:'row', flexWrap:'wrap', marginVertical:8, justifyContent:'space-between'}}>
             {CLASSES.map(c=> (
               <TouchableOpacity key={c.name} style={{width:'30%', padding:8, marginBottom:8, borderWidth: newGuild.class===c.name?2:1, borderColor: newGuild.class===c.name?colors.viridian:'#ccc', borderRadius:8, flexDirection:'row', alignItems:'center'}} onPress={()=>setNewGuild(prev=>({...prev, class:c.name}))}>
-                <FontAwesome5 name={normalizeIcon(c.icon)} size={18} color={newGuild.class===c.name ? colors.viridian : colors.text} solid style={{marginRight:8}} />
+                <FontAwesome6 name={normalizeIcon(c.icon)} size={18} color={newGuild.class===c.name ? colors.viridian : colors.text} solid style={{marginRight:8}} />
                 <Text style={{color: colors.textDark}}>{c.name}</Text>
               </TouchableOpacity>
             ))}
@@ -508,7 +697,7 @@ export default function Guilds() {
                     {CLASSES.map(c => (
                       <TouchableOpacity key={c.name} style={styles.sheetRow} onPress={()=>{ setSelectedClasses(prev => prev.includes(c.name) ? prev.filter(x=>x!==c.name) : [...prev, c.name]); }}>
                         <View style={[styles.checkbox, selectedClasses.includes(c.name) && {backgroundColor:colors.viridian, borderColor: colors.viridian}]} />
-                        <FontAwesome5 name={normalizeIcon(c.icon)} size={16} color={colors.viridian} solid style={{marginRight:10}} />
+                        <FontAwesome6 name={normalizeIcon(c.icon)} size={16} color={colors.viridian} solid style={{marginRight:10}} />
                         <Text style={styles.sheetText}>{c.name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -534,7 +723,7 @@ export default function Guilds() {
                 {selectedGuild.icon ? <Image source={{uri:selectedGuild.icon}} style={{width:80,height:80,borderRadius:12,marginRight:12}} /> : null}
                 <View style={{flex:1}}>
                   <View style={{flexDirection:'row', alignItems:'center'}}>
-                    <FontAwesome5 name={normalizeIcon((CLASSES.find(c=>c.name===selectedGuild.class) || {icon:'map'}).icon)} size={20} color={colors.textDark} solid style={{marginRight:8}} />
+                    <FontAwesome6 name={normalizeIcon((CLASSES.find(c=>c.name===selectedGuild.class) || {icon:'map'}).icon)} size={20} color={colors.textDark} solid style={{marginRight:8}} />
                     <Text style={{fontSize:20,fontWeight:'800', color: colors.textDark}}>{selectedGuild.name}</Text>
                   </View>
                   <Text style={{color: colors.textMuted}}>{selectedGuild.description}</Text>
@@ -556,12 +745,27 @@ export default function Guilds() {
                 ) : (
                   <Text style={{color:'#666', marginTop:8}}>You must join this guild to create quests.</Text>
                 )}
-
+                <TouchableOpacity style={[styles.button,{backgroundColor:colors.cambridgeBlue}]} onPress={()=>{ setModalVisible(false); setSelectedGuild(null); }}><Text style={styles.buttonText}>Close</Text></TouchableOpacity>
                 <FlatList
                     data={questsForGuild(selectedGuild)}
                     keyExtractor={i => i.id}
                     renderItem={({ item }) => (
-                        <TouchableOpacity onPress={() => { setViewingQuest(item); setQuestDetailModal(true); }}>
+                        <TouchableOpacity onPress={async () => {
+                          try {
+                            const qref = doc(db, 'Quests', item.id);
+                            const qdoc = await getDoc(qref);
+                            if (qdoc.exists()) {
+                              const qdata = { id: qdoc.id, ...qdoc.data() };
+                              setViewingQuest(qdata);
+                              if (qdata.guildId) {
+                                try { const gdoc = await getDoc(doc(db,'Guilds', qdata.guildId)); if (gdoc.exists()) setViewingQuestGuild({ id: gdoc.id, ...gdoc.data() }); else setViewingQuestGuild(null); } catch(e){ setViewingQuestGuild(null); }
+                              } else setViewingQuestGuild(null);
+                            } else {
+                              setViewingQuest(item); setViewingQuestGuild(null);
+                            }
+                          } catch (e) { setViewingQuest(item); setViewingQuestGuild(null); }
+                          setQuestDetailModal(true);
+                        }}>
                         {renderQuestCard({ item })}
                         </TouchableOpacity>
                     )}
@@ -577,24 +781,17 @@ export default function Guilds() {
                   <TextInput placeholder='Title' style={styles.input} value={guildQuest.title} onChangeText={t=>setGuildQuest(prev=>({...prev,title:t}))} />
                   <TextInput placeholder='Description' style={[styles.input,{height:100}]} value={guildQuest.description} onChangeText={t=>setGuildQuest(prev=>({...prev,description:t}))} multiline />
 
-                  <TextInput placeholder='Location (Optional)' style={styles.input} value={placeQuery || guildQuest.location} onChangeText={(t)=>{ setPlaceQuery(t); setGuildQuest(prev=>({...prev, location: ''})); fetchPredictions(t); }} onBlur={()=>setPredictions([])} />
+                  <TextInput placeholder="Location (Optional)" style={styles.input} value={placeQuery || guildQuest.location} onChangeText={(text)=>{ setPlaceQuery(text); setGuildQuest({...guildQuest, location: ''}); fetchPredictions(text); }} />
 
-                  {predictions.length > 0 && (
-                    <View style={{backgroundColor:colors.mintCream, borderRadius:8, marginBottom:6}}>
-                      {predictions.map(p => (
-                        <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{
-                          const details = await fetchPlaceDetails(p.place_id);
-                          if (details) {
-                            setGuildQuest(prev=> ({...prev, location: details.name || details.address, placeCoords: details.coords }));
-                            setPlaceQuery(details.name || details.address);
-                            setPredictions([]);
-                          }
-                        }}>
-                          <Text>{p.description}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
+                                {predictions.length > 0 && (
+                                  <View style={{borderRadius:8, marginBottom:6}}>
+                                    {predictions.map(p => (
+                                      <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { setGuildQuest(prev=> ({...prev, location: details.city || details.name || details.address, placeCoords: details.coords })); setPlaceQuery(details.city || details.name || details.address); setPredictions([]); } }}>
+                                        <Text>{p.description}</Text>
+                                      </TouchableOpacity>
+                                    ))}
+                                  </View>
+                                )}
 
                   {/* Date Range */}
               <Text style={{marginTop:10, fontWeight:"bold"}}>Quest Date Range (optional)</Text>
@@ -621,7 +818,7 @@ export default function Guilds() {
               <View style={{flexDirection:"row", flexWrap:'wrap', marginVertical:5, justifyContent:'space-between'}}>
                 {CLASSES.map((c) => (
                   <TouchableOpacity key={c.name} style={[guildQuest.class === c.name ? styles.classSelected : styles.classOption, {width:'30%'}]} onPress={() => { setGuildQuest(prev=>({...prev,class:c.name})); setFilteredBadges(BADGES.filter(b => b.class === c.name)); setGuildQuest(prev => ({...prev, badge:""})); }}>
-                    <FontAwesome5 name={normalizeIcon(c.icon)} size={20} color={guildQuest.class===c.name ? colors.viridian : colors.text} solid style={{marginBottom:6}} />
+                    <FontAwesome6 name={normalizeIcon(c.icon)} size={20} color={guildQuest.class===c.name ? colors.viridian : colors.text} solid style={{marginBottom:6}} />
                     <Text style={{color:colors.text, textAlign:'center'}}>{c.name}</Text>
                   </TouchableOpacity>
                 ))}
@@ -629,10 +826,9 @@ export default function Guilds() {
 
               {/* Difficulty Stars */}
               <Text style={{fontWeight:"bold"}}>Select Difficulty:</Text>
-              <View style={{flexDirection:"row", marginVertical:5}}>
-                {[1,2,3].map((star)=>( <TouchableOpacity key={star} onPress={()=>setGuildQuest(prev=>({...prev,difficulty:star}))}><FontAwesome name={star <= guildQuest.difficulty ? "star" : "star-o"} size={28} color="#A4C3B2" style={{marginRight:8}} /></TouchableOpacity> ))}
-              </View>
-              <Text>XP Reward: {guildQuest.difficulty*10}</Text>
+      <View style={{flexDirection:"row", marginVertical:5}}>
+        {[1,2,3].map((star)=>( <TouchableOpacity key={star} onPress={()=>setGuildQuest({...guildQuest,difficulty:star})}><FontAwesome name={star <= guildQuest.difficulty ? "star" : "star-o"} size={28} color="#A4C3B2" style={{marginRight:8}} /></TouchableOpacity> ))}
+      </View>
 
               {/* Badge Picker */}
               {filteredBadges.length > 0 && (
@@ -641,7 +837,7 @@ export default function Guilds() {
                   <View style={{flexDirection:"row", flexWrap:"wrap"}}>
                     {filteredBadges.map(b => (
                       <TouchableOpacity key={b.name} style={[guildQuest.badge === b.name ? styles.badgeSelected : styles.badgeOption, {flexDirection:'row', alignItems:'center'}]} onPress={()=>setGuildQuest(prev=>({...prev,badge:b.name}))}>
-                        <FontAwesome5 name={normalizeIcon(BADGE_ICONS[b.name] || b.icon || 'trophy')} size={18} color={guildQuest.badge === b.name ? colors.viridian : colors.text} solid style={{marginRight:8}} />
+                        <FontAwesome6 name={normalizeIcon(BADGE_ICONS[b.name] || b.icon || 'trophy')} size={18} color={guildQuest.badge === b.name ? colors.viridian : colors.text} solid style={{marginRight:8}} />
                         <Text style={{color:colors.text}}>{b.name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -659,55 +855,106 @@ export default function Guilds() {
                 <ScrollView style={styles.modalScroll}>
                   {viewingQuest && (
                     <>
-                      {viewingQuest.image ? <Image source={{uri:viewingQuest.image}} style={{width:'100%',height:180,borderRadius:8,marginBottom:8}} /> : null}
-                      <Text style={{fontSize:20,fontWeight:'700'}}>{viewingQuest.title}</Text>
-                      <Text style={{color:'#555', marginBottom:6}}>{viewingQuest.description}</Text>
-                      <Text>Class: {viewingQuest.class} • XP: {viewingQuest.rewards?.xp || 0}</Text>
+                      {viewingQuest.image ? <Image source={{uri:viewingQuest.image}} style={{width:'100%',height:220,borderRadius:8,marginBottom:12}} /> : null}
+                      <Text style={{fontSize:22,fontWeight:'800', color: colors.textDark, flexShrink:1}}>{viewingQuest.title}</Text>
+                      {(viewingQuest.startDate || viewingQuest.endDate) ? (
+                        <Text style={{marginTop:6, color: colors.textMuted}}>
+                          {viewingQuest.startDate && viewingQuest.endDate
+                            ? `${formatDateShort(viewingQuest.startDate)} — ${formatDateShort(viewingQuest.endDate)}`
+                            : (viewingQuest.startDate ? `Starts ${formatDateShort(viewingQuest.startDate)}` : `Ends ${formatDateShort(viewingQuest.endDate)}`)}
+                        </Text>
+                      ) : null}
+                      {viewingQuest.location ? <Text style={{marginTop:6, color: colors.viridian}}>{viewingQuest.location}</Text> : null}
+                      <Text style={{marginTop:6}}>{viewingQuest.description}</Text>
 
-                      <Text style={{marginTop:12,fontWeight:'700'}}>Posts</Text>
-                      {(viewingQuest.posts && viewingQuest.posts.length>0) ? viewingQuest.posts.map((p,i)=>(
-                        <View key={i} style={styles.postCard}>
-                          <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
-                            {p.userIcon ? <Image source={{uri:p.userIcon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
-                            <Text style={{fontWeight:'600'}}>{p.username}</Text>
+                      <View style={{flexDirection:'row', alignItems:'center', marginTop:12}}>
+                        <Text style={{fontWeight:'700', color: colors.textDark, marginRight:12}}>Available rewards</Text>
+                        <View style={{flexDirection:'row', alignItems:'center'}}>
+                          <View style={{flexDirection:'row', alignItems:'center', marginRight:16}}>
+                            <FontAwesome name='bolt' size={16} color={colors.viridian} />
+                            <Text style={{marginLeft:8, color: colors.textMuted}}>{viewingQuest.rewards?.xp || 0} XP</Text>
                           </View>
-                          <Text style={{color:'#333'}}>{p.description}</Text>
-                          {p.image ? <Image source={{uri:p.image}} style={styles.postImagePreview} /> : null}
+                          <View style={{flexDirection:'row', alignItems:'center'}}>
+                            { viewingQuest.rewards?.badge && BADGE_ICONS[viewingQuest.rewards.badge] ? (
+                              <FontAwesome6 name={normalizeIcon(BADGE_ICONS[viewingQuest.rewards.badge])} size={16} color={colors.viridian} solid />
+                            ) : (
+                              <FontAwesome name='trophy' size={16} color={colors.viridian} />
+                            ) }
+                            <Text style={{marginLeft:8, color: colors.textMuted}}>{viewingQuest.rewards?.badge || 'None'}</Text>
+                          </View>
                         </View>
-                      )) : <Text style={{color:'#666'}}>No posts yet.</Text>}
+                      </View>
+                      <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
+                        {viewingQuest.user?.icon ? <Image source={{uri:viewingQuest.user.icon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
+                        <Text style={{fontWeight:'600'}}>{viewingQuest.user?.name}</Text>
+                      </View>
 
-                      {/* Composer only for members */}
+                      <View style={styles.separator} />
+                      <Text style={{marginTop:0,fontSize:18,fontWeight:'bold'}}>Posts</Text>
+                      <View style={styles.postsSection}>
+                        {viewingQuest.posts?.length ? viewingQuest.posts.map((p,i)=>(
+                          <View key={i} style={styles.postCard}>
+                            <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
+                              {p.userIcon ? <Image source={{uri:p.userIcon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
+                              <Text style={{fontWeight:'600'}}>{p.username}</Text>
+                            </View>
+                            <Text style={{color:'#333', marginBottom:6}}>{p.description}</Text>
+                            {p.image && <Image source={{uri:p.image}} style={styles.postImagePreview} />}
+                            {p.timeRange || p.createdAt || p.date ? (
+                              <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
+                                <FontAwesome name='clock-o' size={14} color={colors.textMuted} />
+                                <Text style={{marginLeft:8, color: colors.textMuted}}>
+                                  {p.timeRange
+                                    ? (typeof p.timeRange === 'string'
+                                        ? formatDateShort(p.timeRange)
+                                        : (p.timeRange.start && p.timeRange.end
+                                            ? `${formatDateShort(p.timeRange.start)} — ${formatDateShort(p.timeRange.end)}`
+                                            : (p.timeRange.start ? formatDateShort(p.timeRange.start) : (p.timeRange.end ? formatDateShort(p.timeRange.end) : ''))))
+                                    : (p.createdAt ? formatDateShort(p.createdAt) : (p.date ? formatDateShort(p.date) : ''))
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        )) : <Text style={{color:'#666'}}>No posts yet. Be the first to share!</Text>}
+                      </View>
+
+                      {/* Composer Box */}
                       {isUserMemberOf(selectedGuild) ? (
                         <>
-                          <TextInput placeholder='Write a post...' style={[styles.input,{backgroundColor:colors.mintCream}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
-                          <View style={{flexDirection:'row', justifyContent:'space-between'}}>
-                            <TouchableOpacity style={styles.buttonSmall} onPress={()=>pickImage(setNewPostImage)}><Text style={styles.buttonText}>Add Image</Text></TouchableOpacity>
-                            <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:'#00b894'}]} onPress={async ()=>{
-                              // basic client-side add post to quest doc
-                              try {
-                                const user = auth.currentUser; if (!user) throw new Error('Sign in');
-                                let userIcon=''; let username=user.displayName||'';
-                                try { const udoc = await getDoc(doc(db,'Users',user.uid)); if (udoc.exists()){ userIcon = udoc.data().avatarUrl || ''; username = udoc.data().displayName || username; } } catch(e){}
-                                const qRef = doc(db,'Quests', viewingQuest.id);
-                                await updateDoc(qRef, { posts: arrayUnion({ username, userIcon, description: newPostDesc, image: newPostImage, userId: user.uid }) });
-                                setNewPostDesc(''); setNewPostImage(null);
-                                const qdoc = await getDoc(qRef); if (qdoc.exists()) setViewingQuest({ id: qdoc.id, ...qdoc.data() });
-                                fetchQuests();
-                              } catch(e){ Alert.alert('Error', e.message); }
-                            }}><Text style={styles.buttonText}>Post</Text></TouchableOpacity>
+                        <View style={styles.composerBox}>
+                          <TextInput placeholder='Write a post... (max 50 words)' style={[styles.input,{flex:1, marginBottom:0, backgroundColor: '#fff'}]} value={newPostDesc} onChangeText={setNewPostDesc} multiline />
+                          <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:8}}>
+                            <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:colors.viridian}]} onPress={()=>pickImage(setNewPostImage)}>
+                              <Text style={[styles.buttonText,{color:'#fff'}]}>Add Image</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:colors.viridian}]} onPress={()=>handleAddPost(viewingQuest)}>
+                              <Text style={[styles.buttonText,{color:'#fff'}]}>Post</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.buttonSmall,{backgroundColor:colors.mintGreen}]} onPress={()=>{ setNewPostDesc(''); setNewPostImage(null); }}>
+                              <Text style={[styles.buttonText,{color:'#fff'}]}>Clear</Text>
+                            </TouchableOpacity>
                           </View>
+                          </View>
+                          {newPostImage ? <Image source={{uri:newPostImage}} style={styles.postImagePreview} /> : null}
                         </>
                       ) : (
                         <Text style={{color:'#666', marginTop:8}}>Join the guild to post.</Text>
                       )}
 
-                      <TouchableOpacity style={[styles.button,{backgroundColor:colors.cambridgeBlue, marginTop:12}]} onPress={()=>{ setQuestDetailModal(false); setViewingQuest(null); }}><Text style={styles.buttonText}>Close</Text></TouchableOpacity>
+                      <View style={{marginTop:8}}>
+                        <TouchableOpacity style={[styles.button,{backgroundColor:colors.viridian}]} onPress={()=>handleCompleteQuest(viewingQuest)}>
+                          <Text style={styles.buttonText}>Complete Quest</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.button,{backgroundColor:colors.cambridgeBlue}]} onPress={()=>{ setQuestDetailModal(false); setViewingQuest(null); }}>
+                          <Text style={styles.buttonText}>Close</Text>
+                        </TouchableOpacity>
+                      </View>
                     </>
                   )}
                 </ScrollView>
               </Modal>
-
-              <TouchableOpacity style={[styles.button,{backgroundColor:colors.cambridgeBlue}]} onPress={()=>{ setModalVisible(false); setSelectedGuild(null); }}><Text style={styles.buttonText}>Close</Text></TouchableOpacity>
             </>
           )}
         </ScrollView>

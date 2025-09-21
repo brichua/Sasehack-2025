@@ -71,9 +71,9 @@ export default function Signup({ navigation }) {
           {avatar ? <Image source={{ uri: avatar }} style={styles.avatar} /> : <Text style={{ textAlign: "center", color: colors.textDark }}>Pick Avatar</Text>}
         </TouchableOpacity>
 
-        <TextInput placeholder="Display Name" style={styles.input} value={displayName} onChangeText={setDisplayName} />
-        <TextInput placeholder="Email" style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <TextInput placeholder="Password" style={styles.input} value={password} onChangeText={setPassword} secureTextEntry />
+        <TextInput placeholder="Display Name" style={styles.input2} value={displayName} onChangeText={setDisplayName} />
+        <TextInput placeholder="Email" style={styles.input2} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+        <TextInput placeholder="Password" style={styles.input2} value={password} onChangeText={setPassword} secureTextEntry />
 
         <TouchableOpacity style={[styles.button,{backgroundColor: colors.viridian}]} onPress={handleSignup}>
           <Text style={styles.buttonText}>Sign Up</Text>

@@ -23,8 +23,8 @@ export default function Login({ navigation }) {
       <View style={{flex:1, justifyContent:'center'}}>
         <Text style={{fontSize:26, fontWeight:'800', textAlign:'center', color: colors.textDark, marginBottom:18}}>Welcome Back</Text>
 
-        <TextInput placeholder="Email" style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <TextInput placeholder="Password" style={styles.input} value={password} onChangeText={setPassword} secureTextEntry />
+        <TextInput placeholder="Email" style={styles.input2} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+        <TextInput placeholder="Password" style={styles.input2} value={password} onChangeText={setPassword} secureTextEntry />
 
         <TouchableOpacity style={[styles.button,{backgroundColor: colors.viridian}]} onPress={handleLogin}>
           <Text style={styles.buttonText}>Login</Text>

@@ -19,7 +19,7 @@ import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, getDoc } from 
 import { db, auth } from "./firebase";
 import googleConfig from './googleConfig';
 import * as ImagePicker from "expo-image-picker";
-import { FontAwesome, FontAwesome5 } from "@expo/vector-icons";
+import { FontAwesome, FontAwesome6 } from "@expo/vector-icons";
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function Questboard() {
@@ -47,13 +47,13 @@ export default function Questboard() {
 
   // common alias map for icon names across FA versions (fallbacks)
   const ICON_ALIASES = {
-    'paintbrush': 'paint-brush',
-    'brush': 'paint-brush',
-    'person-hiking': 'hiking',
+    'paintbrush': 'paintbrush',
+    'brush': 'paintbrush',
+    'person-hiking': 'person-hiking',
     'kitchen-set': 'utensils',
-    'cake-candles': 'birthday-cake',
-    'mug-hot': 'coffee',
-    'building-columns': 'university',
+    'cake-candles': 'cake-candles',
+    'mug-hot': 'mug-hot',
+    'building-columns': 'building-columns',
     'gifts': 'gift'
   };
 
@@ -131,6 +131,12 @@ export default function Questboard() {
   const [selectedClasses, setSelectedClasses] = useState([]); // array of class names
   const [locationFilter, setLocationFilter] = useState({ coords: null, radiusKm: 5 });
   const [timeFilterDate, setTimeFilterDate] = useState(null); // ISO string
+  const [guildFilterModal, setGuildFilterModal] = useState(false);
+  const [guildQuery, setGuildQuery] = useState('');
+  const [guildsList, setGuildsList] = useState([]); // cached list of all guilds
+  const [guildResults, setGuildResults] = useState([]); // filtered results for query
+  const [selectedGuildFilter, setSelectedGuildFilter] = useState(null); // {id,name,icon}
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
   const [predictions, setPredictions] = useState([]);
   const [filteredBadges, setFilteredBadges] = useState([]);
@@ -140,8 +146,22 @@ export default function Questboard() {
 
   const fetchQuests = async () => {
     const questSnap = await getDocs(collection(db, "Quests"));
-    const questList = questSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    setQuests(questList);
+    const questList = questSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Collect guildIds referenced by quests
+    const guildIds = Array.from(new Set(questList.map(q => q.guildId).filter(Boolean)));
+    const guildMap = {};
+    // Fetch each guild doc and map id -> { name, icon }
+    for (const gid of guildIds) {
+      try {
+        const gdoc = await getDoc(doc(db, 'Guilds', gid));
+        if (gdoc.exists()) guildMap[gid] = { id: gdoc.id, ...(gdoc.data() || {}) };
+      } catch (e) { /* ignore individual guild fetch errors */ }
+    }
+
+    // Attach guild info to quests when available
+    const enriched = questList.map(q => ({ ...q, guild: q.guild || (q.guildId ? guildMap[q.guildId] : undefined) }));
+    setQuests(enriched);
   };
 
   useEffect(() => { fetchQuests(); }, []);
@@ -174,6 +194,13 @@ export default function Questboard() {
         if (!qCoords) return false;
         const dist = haversineKm(locationFilter.coords, { lat: qCoords.lat, lng: qCoords.lng });
         if (dist > (locationFilter.radiusKm || 0)) return false;
+      }
+
+      // guild filter: if selected, only show quests from that guild
+      if (selectedGuildFilter) {
+        const gid = selectedGuildFilter.id || selectedGuildFilter.guildId || selectedGuildFilter;
+        if (!q.guild && q.guildId !== gid && q.guild?.id !== gid) return false;
+        if (q.guild && q.guild.id !== gid && q.guildId !== gid) return false;
       }
 
       // time filter: check if the selected date is within quest's start/end (inclusive)
@@ -220,14 +247,25 @@ export default function Questboard() {
   // Fetch place details (lat/lng) for a place_id
   const fetchPlaceDetails = async (placeId) => {
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${googleConfig.GOOGLE_API_KEY}&fields=geometry,name,formatted_address`;
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${googleConfig.GOOGLE_API_KEY}&fields=geometry,name,formatted_address,address_component,address_components`;
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.result && data.result.geometry && data.result.geometry.location) {
+        const result = data.result || {};
+        const components = result.address_components || [];
+        const findComp = (types) => {
+          for (const t of types) {
+            const found = components.find(c => Array.isArray(c.types) && c.types.includes(t));
+            if (found) return found.long_name;
+          }
+          return null;
+        };
+        const city = findComp(['locality', 'postal_town', 'administrative_area_level_2', 'administrative_area_level_1']);
         return {
-          name: data.result.name || data.result.formatted_address || '',
-          address: data.result.formatted_address || '',
-          coords: { lat: data.result.geometry.location.lat, lng: data.result.geometry.location.lng }
+          name: result.name || result.formatted_address || '',
+          address: result.formatted_address || '',
+          city: city,
+          coords: { lat: result.geometry.location.lat, lng: result.geometry.location.lng }
         };
       }
     } catch (e) { console.warn('Place details error', e); }
@@ -289,11 +327,11 @@ export default function Questboard() {
         badgeObj.progress = (Number(badgeObj.progress) || 0) + 1;
         // Determine tier thresholds: 5 -> tier1, 25 -> tier2, 50 -> tier3, 100 -> tier4
         const p = badgeObj.progress;
-        let tier = 0;
-        if (p >= 100) tier = 4;
-        else if (p >= 50) tier = 3;
-        else if (p >= 25) tier = 2;
-        else if (p >= 5) tier = 1;
+        let tier = 1;
+        if (p >= 100) tier = 5;
+        else if (p >= 50) tier = 4;
+        else if (p >= 25) tier = 3;
+        else if (p >= 5) tier = 2;
         badgeObj.tier = tier;
 
         // write back into updates.badges preserving existing structure where possible
@@ -425,6 +463,8 @@ export default function Questboard() {
   };
 
   const handleStartDateChange = (event, selectedDate) => {
+    // hide picker on Android after interaction
+    if (!selectedDate) { setShowStartPicker(false); return; }
     setShowStartPicker(Platform.OS === 'ios');
     if (selectedDate) {
       setNewQuest(prev => {
@@ -441,6 +481,7 @@ export default function Questboard() {
   };
 
   const handleEndDateChange = (event, selectedDate) => {
+    if (!selectedDate) { setShowEndPicker(false); return; }
     setShowEndPicker(Platform.OS === 'ios');
     if (selectedDate) {
       setNewQuest(prev => ({ ...prev, endDate: selectedDate.toISOString() }));
@@ -461,8 +502,16 @@ export default function Questboard() {
           const questRef = doc(db, "Quests", item.id);
           const questSnap = await getDoc(questRef);
           if (questSnap.exists()) {
-            setSelectedQuest({ id: questSnap.id, ...questSnap.data() });
-            setSelectedQuestPosts(questSnap.data().posts || []);
+              const qdata = { id: questSnap.id, ...questSnap.data() };
+              // If quest references a guildId but doesn't embed guild, try to fetch guild doc
+              if (!qdata.guild && qdata.guildId) {
+                try {
+                  const gdoc = await getDoc(doc(db, 'Guilds', qdata.guildId));
+                  if (gdoc.exists()) qdata.guild = { id: gdoc.id, ...(gdoc.data() || {}) };
+                } catch (e) { /* ignore */ }
+              }
+              setSelectedQuest(qdata);
+              setSelectedQuestPosts(qdata.posts || []);
           } else {
             setSelectedQuest(item);
             setSelectedQuestPosts(item.posts || []);
@@ -478,7 +527,7 @@ export default function Questboard() {
         <View style={{flexDirection:'row', alignItems:'center', marginBottom:6}}>
           {ended ? <Text style={styles.endedTag}>ENDED</Text> : null}
           <View style={{width:36,height:36,borderRadius:18,backgroundColor:COLORS.viridian,alignItems:'center',justifyContent:'center',marginRight:8}}>
-            <FontAwesome5 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={16} color={COLORS.mintCream} solid />
+            <FontAwesome6 name={normalizeIcon((CLASSES.find(c=>c.name===item.class) || {icon:'map'}).icon)} size={16} color={COLORS.mintCream} solid />
           </View>
           <Text style={styles.title}>{item.title}</Text>
         </View>
@@ -494,18 +543,33 @@ export default function Questboard() {
           </View>
           <View style={{flexDirection:'row', alignItems:'center'}}>
             { item.rewards?.badge && BADGE_ICONS[item.rewards.badge] ? (
-              <FontAwesome5 name={normalizeIcon(BADGE_ICONS[item.rewards.badge])} size={16} color={COLORS.viridian} solid />
+              <FontAwesome6 name={normalizeIcon(BADGE_ICONS[item.rewards.badge])} size={16} color={COLORS.viridian} solid />
             ) : (
               <FontAwesome name='trophy' size={16} color={COLORS.viridian} />
             ) }
           </View>
         </View>
 
-        {item.location ? <Text style={styles.metaText}>Location: {item.location}{item.placeCoords ? ` (${item.placeCoords.lat.toFixed(3)}, ${item.placeCoords.lng.toFixed(3)})` : ''}</Text> : null}
 
         <View style={{flexDirection:'row', alignItems:'center', marginTop:10}}>
           {item.user?.icon ? <Image source={{uri:item.user.icon}} style={styles.avatarSmall} /> : null}
           <Text style={styles.metaText}>{item.user?.name || '—'}</Text>
+          {/* If quest has a guild, show a separator then guild icon + name */}
+          {(item.guild || item.guildName || item.guildId) ? (
+            <>
+              <View style={{width:1, height:24, backgroundColor:'#e6ece6', marginHorizontal:12}} />
+              { /* guild object preferred, fallbacks to guildName/guildId */ }
+              {item.guild?.icon ? (
+                // If icon looks like a URI show image, otherwise treat as font icon name
+                (typeof item.guild.icon === 'string' && (item.guild.icon.startsWith('http') || item.guild.icon.startsWith('file:') || item.guild.icon.startsWith('data:'))) ? (
+                  <Image source={{uri:item.guild.icon}} style={styles.guildIcon} />
+                ) : (
+                  <FontAwesome6 name={normalizeIcon(item.guild.icon || 'map')} size={18} color={COLORS.viridian} solid style={{marginRight:8}} />
+                )
+              ) : null}
+              <Text style={styles.guildName}>{item.guild?.name || item.guildName || item.guildId}</Text>
+            </>
+          ) : null}
         </View>
       </TouchableOpacity>
     );
@@ -552,7 +616,7 @@ export default function Questboard() {
                       {selectedQuest.image ? <Image source={{uri:selectedQuest.image}} style={{width:'100%',height:220,borderRadius:8,marginBottom:12}} /> : null}
                       <View style={{flexDirection:'row', alignItems:'center', marginTop:0}}>
                         <View style={{width:40,height:40,borderRadius:20,backgroundColor: COLORS.viridian,alignItems:'center',justifyContent:'center',marginRight:12}}>
-                          <FontAwesome5 name={normalizeIcon(CLASS_ICONS[selectedQuest.class] || 'map-o')} size={18} color="#fff" solid />
+                          <FontAwesome6 name={normalizeIcon(CLASS_ICONS[selectedQuest.class] || 'map-o')} size={18} color="#fff" solid />
                         </View>
                         <Text style={{fontSize:22,fontWeight:'800', color: COLORS.textDark, flexShrink:1}}>{selectedQuest.title}</Text>
                       </View>
@@ -576,7 +640,7 @@ export default function Questboard() {
                           </View>
                           <View style={{flexDirection:'row', alignItems:'center'}}>
                             { selectedQuest.rewards?.badge && BADGE_ICONS[selectedQuest.rewards.badge] ? (
-                              <FontAwesome5 name={normalizeIcon(BADGE_ICONS[selectedQuest.rewards.badge])} size={16} color={COLORS.viridian} solid />
+                              <FontAwesome6 name={normalizeIcon(BADGE_ICONS[selectedQuest.rewards.badge])} size={16} color={COLORS.viridian} solid />
                             ) : (
                               <FontAwesome name='trophy' size={16} color={COLORS.viridian} />
                             ) }
@@ -586,7 +650,20 @@ export default function Questboard() {
                       </View>
                       <View style={{flexDirection:'row', alignItems:'center', marginTop:8}}>
                         {selectedQuest.user?.icon ? <Image source={{uri:selectedQuest.user.icon}} style={{width:36,height:36,borderRadius:18,marginRight:8}} /> : null}
-                        <Text>{selectedQuest.user?.name}</Text>
+                        <Text style={{fontWeight:'600'}}>{selectedQuest.user?.name}</Text>
+                        {(selectedQuest.guild || selectedQuest.guildName || selectedQuest.guildId) ? (
+                          <>
+                            <View style={{width:1, height:22, backgroundColor:'#e6ece6', marginHorizontal:10}} />
+                            {selectedQuest.guild?.icon ? (
+                              (typeof selectedQuest.guild.icon === 'string' && (selectedQuest.guild.icon.startsWith('http') || selectedQuest.guild.icon.startsWith('file:') || selectedQuest.guild.icon.startsWith('data:'))) ? (
+                                <Image source={{uri:selectedQuest.guild.icon}} style={styles.guildIconSmall} />
+                              ) : (
+                                <FontAwesome6 name={normalizeIcon(selectedQuest.guild.icon || 'map')} size={16} color={COLORS.viridian} solid style={{marginRight:8}} />
+                              )
+                            ) : null}
+                            <Text style={styles.guildName}>{selectedQuest.guild?.name || selectedQuest.guildName || selectedQuest.guildId}</Text>
+                          </>
+                        ) : null}
                       </View>
         
                       <View style={styles.separator} />
@@ -658,7 +735,7 @@ export default function Questboard() {
               {CLASSES.map(c => (
                 <TouchableOpacity key={c.name} style={styles.sheetRow} onPress={()=>{ setSelectedClasses(prev => prev.includes(c.name) ? prev.filter(x=>x!==c.name) : [...prev, c.name]); }}>
                   <View style={[styles.checkbox, selectedClasses.includes(c.name) && {backgroundColor:COLORS.viridian, borderColor: COLORS.viridian}]} />
-                  <FontAwesome5 name={normalizeIcon(c.icon)} size={16} color={COLORS.viridian} solid style={{marginRight:10}} />
+                  <FontAwesome6 name={normalizeIcon(c.icon)} size={16} color={COLORS.viridian} solid style={{marginRight:10}} />
                   <Text style={styles.sheetText}>{c.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -707,8 +784,8 @@ export default function Questboard() {
           <View style={styles.modalBackdrop}>
             <View style={[styles.sheet, { backgroundColor: COLORS.azureWeb }]}>
               <Text style={styles.sheetTitle}>Filter by Date</Text>
-              <TouchableOpacity style={[styles.buttonSecondary]} onPress={()=>setTimeFilterDate(new Date().toISOString())}>
-                <Text style={styles.buttonText}>Set to Today</Text>
+              <TouchableOpacity style={[styles.buttonSecondary]} onPress={()=>{ setShowTimePicker(true); }}>
+                <Text style={styles.buttonText}>Choose Date</Text>
               </TouchableOpacity>
 
               <View style={{marginTop:10}}>
@@ -716,11 +793,13 @@ export default function Questboard() {
               </View>
 
               <View style={{marginTop:8}}>
-                <DateTimePicker value={timeFilterDate ? new Date(timeFilterDate) : new Date()} mode="date" display="default" onChange={(e, d)=>{ if (d) setTimeFilterDate(d.toISOString()); }} />
+                { showTimePicker ? (
+                  <DateTimePicker value={timeFilterDate ? new Date(timeFilterDate) : new Date()} mode="date" display="default" onChange={(e, d)=>{ setShowTimePicker(Platform.OS === 'ios'); if (d) setTimeFilterDate(d.toISOString()); }} accentColor="#6b9080ff" textColor="#6b9080ff" />
+                ) : null }
               </View>
 
               <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:12}}>
-                <TouchableOpacity style={[styles.buttonTertiary,{flex:1, marginRight:6, backgroundColor: COLORS.cambridgeBlue}]} onPress={()=>{ setTimeFilterDate(null); setTimeFilterModal(false); }}>
+                <TouchableOpacity style={[styles.buttonTertiary,{flex:1, marginRight:6, backgroundColor: COLORS.cambridgeBlue}]} onPress={()=>{ setShowTimePicker(false); setTimeFilterDate(null); setTimeFilterModal(false); }}>
                   <Text style={styles.buttonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.buttonPrimary,{flex:1, marginLeft:6}]} onPress={()=>setTimeFilterModal(false)}>
@@ -740,9 +819,9 @@ export default function Questboard() {
               <TextInput placeholder="Location (Optional)" style={styles.input} value={placeQuery || newQuest.location} onChangeText={(text)=>{ setPlaceQuery(text); setNewQuest({...newQuest, location: ''}); fetchPredictions(text); }} />
 
               {predictions.length > 0 && (
-                <View style={{backgroundColor:COLORS.mintCream, borderRadius:8, marginBottom:6}}>
+                <View style={{borderRadius:8, marginBottom:6}}>
                   {predictions.map(p => (
-                    <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { setNewQuest(prev=> ({...prev, location: details.name || details.address, placeCoords: details.coords })); setPlaceQuery(details.name || details.address); setPredictions([]); } }}>
+                    <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { setNewQuest(prev=> ({...prev, location: details.city || details.name || details.address, placeCoords: details.coords })); setPlaceQuery(details.city || details.name || details.address); setPredictions([]); } }}>
                       <Text>{p.description}</Text>
                     </TouchableOpacity>
                   ))}
@@ -767,11 +846,11 @@ export default function Questboard() {
               {dateError ? <Text style={{color:'red',marginTop:6}}>{dateError}</Text> : null}
 
               {showStartPicker && (
-                <DateTimePicker value={newQuest.startDate ? new Date(newQuest.startDate) : new Date()} mode="date" display="default" onChange={handleStartDateChange} maximumDate={newQuest.endDate ? new Date(newQuest.endDate) : undefined} />
+                <DateTimePicker value={newQuest.startDate ? new Date(newQuest.startDate) : new Date()} mode="date" display="default" onChange={handleStartDateChange} maximumDate={newQuest.endDate ? new Date(newQuest.endDate) : undefined} accentColor="#6b9080ff" textColor="#6b9080ff" />
               )}
 
               {showEndPicker && (
-                <DateTimePicker value={newQuest.endDate ? new Date(newQuest.endDate) : (newQuest.startDate ? new Date(newQuest.startDate) : new Date())} mode="date" display="default" onChange={handleEndDateChange} minimumDate={newQuest.startDate ? new Date(newQuest.startDate) : undefined} />
+                <DateTimePicker value={newQuest.endDate ? new Date(newQuest.endDate) : (newQuest.startDate ? new Date(newQuest.startDate) : new Date())} mode="date" display="default" onChange={handleEndDateChange} minimumDate={newQuest.startDate ? new Date(newQuest.startDate) : undefined} accentColor="#6b9080ff" textColor="#6b9080ff" />
               )}
 
               {/* Class Picker */}
@@ -779,7 +858,7 @@ export default function Questboard() {
               <View style={{flexDirection:"row", marginVertical:5, flexWrap:'wrap', justifyContent:'space-between'}}>
                 {CLASSES.map((c) => (
                   <TouchableOpacity key={c.name} style={newQuest.class === c.name ? styles.classSelected : styles.classOption} onPress={() => { setNewQuest({...newQuest,class:c.name}); setFilteredBadges(BADGES.filter(b => b.class === c.name)); setNewQuest(prev => ({...prev, badge:""})); }}>
-                    <FontAwesome5 name={normalizeIcon(c.icon)} size={22} color={COLORS.text} solid />
+                    <FontAwesome6 name={normalizeIcon(c.icon)} size={22} color={COLORS.text} solid />
                     <Text style={{color:COLORS.text, marginTop:6, textAlign:'center'}}>{c.name}</Text>
                   </TouchableOpacity>
                 ))}
@@ -799,7 +878,7 @@ export default function Questboard() {
                     {filteredBadges.map(b => (
                       <TouchableOpacity key={b.name} style={newQuest.badge === b.name ? styles.badgeSelected : styles.badgeOption} onPress={()=>setNewQuest({...newQuest,badge:b.name})}>
                         <View style={{flexDirection:'row', alignItems:'center'}}>
-                          { (b.icon || BADGE_ICONS[b.name]) ? <FontAwesome5 name={normalizeIcon(b.icon || BADGE_ICONS[b.name])} size={16} color={COLORS.viridian} solid style={{marginRight:8}} /> : null }
+                          { (b.icon || BADGE_ICONS[b.name]) ? <FontAwesome6 name={normalizeIcon(b.icon || BADGE_ICONS[b.name])} size={16} color={COLORS.viridian} solid style={{marginRight:8}} /> : null }
                           <Text style={{color:COLORS.text}}>{b.name}</Text>
                         </View>
                       </TouchableOpacity>
@@ -867,7 +946,7 @@ const styles = StyleSheet.create({
   buttonTertiary: { padding:12, borderRadius:10, backgroundColor:"#cbd6cf", marginVertical:8, alignItems:'center' },
   buttonText: { color:"#fff", textAlign:"center", fontWeight:"700" },
 
-  input: { backgroundColor:"#fff", padding:12, borderRadius:10, marginVertical:8, borderColor:'#eee', borderWidth:1 },
+  input: { backgroundColor:"#fff", padding:12, borderRadius:10, marginVertical:8},
 
   postCard: { backgroundColor:'#fff', padding:10, borderRadius:10, marginVertical:8 },
   composerBox: { backgroundColor: '#fff', padding: 10, borderRadius: 12, marginVertical: 10 },
@@ -884,6 +963,9 @@ const styles = StyleSheet.create({
 
   avatar: { width:44, height:44, borderRadius:22, marginRight:8 },
   avatarSmall: { width:36, height:36, borderRadius:18, marginRight:8 },
+  guildIcon: { width:28, height:28, borderRadius:6, marginRight:8 },
+  guildIconSmall: { width:22, height:22, borderRadius:6, marginRight:8 },
+  guildName: { color:'#456', fontSize:13, fontWeight:'600' },
 
   modalBackdrop: { flex:1, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center' },
   sheet: { marginHorizontal:18, borderRadius:12, padding:14, shadowColor:'#000', shadowOpacity:0.08, shadowRadius:10, elevation:6 },
