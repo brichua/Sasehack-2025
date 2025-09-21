@@ -238,7 +238,7 @@ const getCompletedQuestCountsByClass = () => {
         />
         </Text>
         
-
+        <Text style={styles.sectionTitle}>Activity:</Text>
           {/* Toggle Tabs */}
           <View style={styles.toggleContainer}>
             <TouchableOpacity
@@ -294,7 +294,7 @@ const getCompletedQuestCountsByClass = () => {
             <View style={{ width: "100%", alignItems: "center", paddingVertical: 20 }}>
               <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>User Stats</Text>
               <Text style={{ fontSize: 16 }}>XP: {user?.xp || 0}</Text>
-              <Text style={{ fontSize: 16 }}>Badges Earned: {user?.badges?.length || 0}</Text>
+              <Text style={{ fontSize: 16 }}>Badges Earned: {user?.badges ? Object.keys(user.badges).length : 0}</Text>
               <Text style={{ fontSize: 16 }}>Posts Made: {userPosts.length}</Text>
               <Text style={{ fontSize: 16, marginTop: 10, fontWeight: "bold" }}>Completed Quests by Class:</Text>
               <Text style={{ fontSize: 16 }}>Artist: {questCounts.artist}</Text>
