@@ -250,7 +250,7 @@ export default function Questboard() {
       const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${googleConfig.GOOGLE_API_KEY}&fields=geometry,name,formatted_address,address_component,address_components`;
       const res = await fetch(url);
       const data = await res.json();
-      if (data && data.result && data.result.geometry && data.result.geometry.location) {
+        if (data && data.result && data.result.geometry && data.result.geometry.location) {
         const result = data.result || {};
         const components = result.address_components || [];
         const findComp = (types) => {
@@ -260,12 +260,14 @@ export default function Questboard() {
           }
           return null;
         };
-        const city = findComp(['locality', 'postal_town', 'administrative_area_level_2', 'administrative_area_level_1']);
+        // Prefer formatted_address (full address) or place name when saving location text.
+        const preferredLocationText = result.formatted_address || result.name || findComp(['locality', 'postal_town', 'administrative_area_level_2', 'administrative_area_level_1']) || '';
         return {
           name: result.name || result.formatted_address || '',
           address: result.formatted_address || '',
-          city: city,
-          coords: { lat: result.geometry.location.lat, lng: result.geometry.location.lng }
+          city: findComp(['locality', 'postal_town', 'administrative_area_level_2', 'administrative_area_level_1']),
+          coords: { lat: result.geometry.location.lat, lng: result.geometry.location.lng },
+          preferredLocationText
         };
       }
     } catch (e) { console.warn('Place details error', e); }
@@ -825,15 +827,15 @@ export default function Questboard() {
                           key={p.place_id}
                           style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}}
                           onPress={async ()=>{
-                            const details = await fetchPlaceDetails(p.place_id);
-                            if (details) {
-                              // Prefer the place name or formatted address over just the city
-                              const locationText = details.name || details.address || details.city || '';
-                              setNewQuest(prev=> ({...prev, location: locationText, placeCoords: details.coords }));
-                              setPlaceQuery(locationText);
-                              setPredictions([]);
-                            }
-                          }}
+                              const details = await fetchPlaceDetails(p.place_id);
+                              if (details) {
+                                // Prefer the full formatted address or place name when saving location
+                                const locationText = details.preferredLocationText || details.address || details.name || details.city || '';
+                                setNewQuest(prev=> ({...prev, location: locationText, placeCoords: details.coords }));
+                                setPlaceQuery(locationText);
+                                setPredictions([]);
+                              }
+                            }}
                         >
                           <Text>{p.description}</Text>
                         </TouchableOpacity>

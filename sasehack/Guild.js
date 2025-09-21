@@ -421,7 +421,7 @@ export default function Guilds() {
         guildId: g.id,
         user: { name: displayName || '', icon: userIcon || '' },
         posts: [],
-        rewards: { xp: (questData.difficulty||1)*10, badge: questData.badge || '' },
+        rewards: { xp: (questData.difficulty||0)*10, badge: questData.badge || '' },
         location: questData.location || null
       };
       await addDoc(collection(db, 'Quests'), data);
@@ -459,11 +459,13 @@ export default function Guilds() {
           return null;
         };
         const city = findComp(['locality', 'postal_town', 'administrative_area_level_2', 'administrative_area_level_1']);
+        const preferredLocationText = result.formatted_address || result.name || city || '';
         return {
           name: result.name || result.formatted_address || '',
           address: result.formatted_address || '',
           city: city,
-          coords: { lat: result.geometry.location.lat, lng: result.geometry.location.lng }
+          coords: { lat: result.geometry.location.lat, lng: result.geometry.location.lng },
+          preferredLocationText
         };
       }
     } catch (e) { console.warn('Place details error', e); }
@@ -567,12 +569,13 @@ export default function Guilds() {
             <TextInput keyboardType='numeric' value={String(locationFilter.radiusKm)} onChangeText={(t)=>{ const v = Number(t) || 0; setLocationFilter(prev=> ({...prev, radiusKm: v})); }} style={[styles.input, {backgroundColor: colors.mintCream}]} />
             {predictions.length > 0 && (
               <View style={{backgroundColor:colors.mintCream, borderRadius:8, marginBottom:6}}>
-                {predictions.map(p => (
+                    {predictions.map(p => (
                   <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{
                     const details = await fetchPlaceDetails(p.place_id);
                     if (details) {
                       setSelectedLocation(details);
-                      setPlaceQuery(details.city || details.name || details.address);
+                      const text = details.preferredLocationText || details.address || details.name || details.city || '';
+                      setPlaceQuery(text);
                       setPredictions([]);
                     }
                   }}>
@@ -655,14 +658,14 @@ export default function Guilds() {
         <ScrollView style={styles.modalScroll}>
           <TextInput placeholder='Guild name' style={styles.input} value={newGuild.name} onChangeText={t=>setNewGuild(prev=>({...prev, name:t}))} />
           <TextInput placeholder='Description' style={[styles.input,{height:100}]} value={newGuild.description} onChangeText={t=>setNewGuild(prev=>({...prev, description:t}))} multiline />
-          <TextInput placeholder="Location (City)" style={styles.input} value={placeQuery || newGuild.location} onChangeText={(text)=>{ setPlaceQuery(text);setNewGuild(prev=>({...prev, location: ''})); fetchPredictions(text); }} />
+          <TextInput placeholder="Location (Optional)" style={styles.input} value={placeQuery || newGuild.location} onChangeText={(text)=>{ setPlaceQuery(text);setNewGuild(prev=>({...prev, location: ''})); fetchPredictions(text); }} />
 
                                 {predictions.length > 0 && (
                                   <View style={{borderRadius:8, marginBottom:6}}>
                                     {predictions.map(p => (
-                                      <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { setNewGuild(prev=> ({...prev, location: details.city || details.name || details.address, placeCoords: details.coords })); setPlaceQuery(details.city || details.name || details.address); setPredictions([]); } }}>
-                                        <Text>{p.description}</Text>
-                                      </TouchableOpacity>
+                                      <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { const text = details.preferredLocationText || details.address || details.name || details.city || ''; setNewGuild(prev=> ({...prev, location: text, placeCoords: details.coords })); setPlaceQuery(text); setPredictions([]); } }}>
+                                                          <Text>{p.description}</Text>
+                                                        </TouchableOpacity>
                                     ))}
                                   </View>
                                 )}
@@ -784,12 +787,17 @@ export default function Guilds() {
                                 {predictions.length > 0 && (
                                   <View style={{borderRadius:8, marginBottom:6}}>
                                     {predictions.map(p => (
-                                      <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { setGuildQuest(prev=> ({...prev, location: details.city || details.name || details.address, placeCoords: details.coords })); setPlaceQuery(details.city || details.name || details.address); setPredictions([]); } }}>
+                                      <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { const text = details.preferredLocationText || details.address || details.name || details.city || ''; setGuildQuest(prev=> ({...prev, location: text, placeCoords: details.coords })); setPlaceQuery(text); setPredictions([]); } }}>
                                         <Text>{p.description}</Text>
                                       </TouchableOpacity>
                                     ))}
                                   </View>
                                 )}
+
+                  <TouchableOpacity style={[styles.buttonSecondary]} onPress={()=>pickImage((uri)=>setGuildQuest(prev=>({...prev, image: uri})))}>
+                    <Text style={styles.buttonText}>Pick Quest Image (Optional)</Text>
+                  </TouchableOpacity>
+                  {guildQuest.image ? <Image source={{uri:guildQuest.image}} style={{width:140,height:140,alignSelf:'center',borderRadius:10,marginVertical:8}} /> : null}
 
                   {/* Date Range */}
               <Text style={{marginTop:10, fontWeight:"bold"}}>Quest Date Range (optional)</Text>

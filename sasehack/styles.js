@@ -60,6 +60,7 @@ export default StyleSheet.create({
   badgeOption: { padding:8, borderWidth:1, borderColor:'#e6e6e6', borderRadius:10, margin:6 },
   badgeSelected: { padding:8, borderWidth:2, borderColor:'#6b9080ff', borderRadius:10, margin:6, backgroundColor:'#f6fff8ff' },
   card: { backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 8 },
+  cardImage: { width: '100%', height: 140, borderRadius: 10, marginBottom: 10 },
   title: { fontWeight: '700', fontSize: 16, color: colors.textDark },
   modalScroll: { padding: 16, backgroundColor: colors.azureWeb, flex: 1 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center' },
