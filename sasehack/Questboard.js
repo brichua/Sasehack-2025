@@ -820,11 +820,24 @@ export default function Questboard() {
 
               {predictions.length > 0 && (
                 <View style={{borderRadius:8, marginBottom:6}}>
-                  {predictions.map(p => (
-                    <TouchableOpacity key={p.place_id} style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}} onPress={async ()=>{ const details = await fetchPlaceDetails(p.place_id); if (details) { setNewQuest(prev=> ({...prev, location: details.city || details.name || details.address, placeCoords: details.coords })); setPlaceQuery(details.city || details.name || details.address); setPredictions([]); } }}>
-                      <Text>{p.description}</Text>
-                    </TouchableOpacity>
-                  ))}
+                      {predictions.map(p => (
+                        <TouchableOpacity
+                          key={p.place_id}
+                          style={{padding:8,borderBottomWidth:1,borderColor:'#eee'}}
+                          onPress={async ()=>{
+                            const details = await fetchPlaceDetails(p.place_id);
+                            if (details) {
+                              // Prefer the place name or formatted address over just the city
+                              const locationText = details.name || details.address || details.city || '';
+                              setNewQuest(prev=> ({...prev, location: locationText, placeCoords: details.coords }));
+                              setPlaceQuery(locationText);
+                              setPredictions([]);
+                            }
+                          }}
+                        >
+                          <Text>{p.description}</Text>
+                        </TouchableOpacity>
+                      ))}
                 </View>
               )}
 
