@@ -557,8 +557,9 @@ const getCompletedQuestCountsByClass = () => {
       />
       {/* Detail Modal for quest or post */}
       <Modal visible={detailModalVisible} animationType="slide" onRequestClose={()=>setDetailModalVisible(false)}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#f6fff8' }}>
         <ScrollView style={{flex:1, padding:12, backgroundColor:'#f6fff8'}}>
-            <TouchableOpacity onPress={()=>setDetailModalVisible(false)} style={{alignSelf:'flex-end', padding:8}}>
+            <TouchableOpacity onPress={()=>setDetailModalVisible(false)} style={{alignSelf:'flex-end', padding:8, marginTop: 20}}>
               <Text style={{fontWeight:'700'}}>Close</Text>
             </TouchableOpacity>
             {detailItem ? (
@@ -680,6 +681,7 @@ const getCompletedQuestCountsByClass = () => {
               </View>
             ) : null}
           </ScrollView>
+          </SafeAreaView>
   </Modal>
     </SafeAreaView>
   );
